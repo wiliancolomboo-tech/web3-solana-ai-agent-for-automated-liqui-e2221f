@@ -1,0 +1,39 @@
++---------------------------------------+
+                                  |     Solana High-Performance RPC       |
+                                  |   (Geyser gRPC / WebSocket Stream)    |
+                                  +-------------------+-------------------+
+                                                      |
+                                                      | Account / Slot Updates
+                                                      v
++------------------------+       +--------------------+-------------------+       +-----------------------+
+|  Historical Price &    |       |         Ingestion Pipeline             |       | Orca / Raydium        |
+|  Orderbook State Store |<----->|   - Decodes Whirlpool/PoolState        |<----->| On-Chain Program State|
+|  (In-Memory Ring-Buf)  |       |   - Calculates Real-Time Tick Indices  |       | (CLMM Core Engine)    |
++------------------------+       +--------------------+-------------------+       +-----------------------+
+                                                      |
+                                                      v
+                                 +--------------------+-------------------+
+                                 | Kinetic Volatility Analysis Engine     |
+                                 |  - Drift-Adjusted Garman-Klass Vol     |
+                                 |  - Tick Velocity ($v_t$) & Accel ($a_t$)|
+                                 |  - Kinetic Energy $E_k = \frac{1}{2}mv^2$|
+                                 |  - Optimal Boundary Calculator ($\sigma_k$)|
+                                 +--------------------+-------------------+
+                                                      |
+                                           Rebalance Triggered?
+                                                      |
+                                                      v
+                                 +--------------------+-------------------+
+                                 | Atomic Execution & MEV Bundler Engine  |
+                                 |  - Harvest Accrued Fees & Rewards      |
+                                 |  - Withdraw Liquidity from Stale Ticks |
+                                 |  - Swap Residuals for Exact Ratios     |
+                                 |  - Mint New Concentrated Range Position|
+                                 |  - Submit via Jito MEV Bundle          |
+                                 +--------------------+-------------------+
+                                                      |
+                                                      v
+                                 +--------------------+-------------------+
+                                 |     Solana Mainnet-Beta Validators     |
+                                 |         (Jito Block Engine)            |
+                                 +----------------------------------------+

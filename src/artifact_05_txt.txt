@@ -1,0 +1,12 @@
++-----------------------+
+       | Residual Asset Drift  |
+       +-----------+-----------+
+                   |
+     Is Delta Value > Swap Threshold?
+            /              \
+         [YES]            [NO]
+          /                  \
++-------------------+   +--------------------+
+| Execute Single-Hop|   | Deposit Asymmetric |
+| Jup/Direct Routing|   | Single-Sided Range |
++-------------------+   +--------------------+

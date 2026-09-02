@@ -1,0 +1,3 @@
+[Agent Init] Monitoring CLMM: 7qbRF6YsyGuLUVs6Y1q64bdVrfe4ZcUUz1JRdoVNUJnm
+[Kinetic Analysis] Vol: 0.0124 | Vel: -0.00034 | Ek: 0.0021 | Bounds: [-19420, -18200]
+[Status] Position in optimal boundary. Active Tick: -18810. No rebalance required.

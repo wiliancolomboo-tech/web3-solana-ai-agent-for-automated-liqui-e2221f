@@ -1,0 +1,1 @@
+pm2 logs solana-clmm-agent
