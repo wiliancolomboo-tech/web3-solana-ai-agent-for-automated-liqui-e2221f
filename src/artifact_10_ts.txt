@@ -1,0 +1,46 @@
+import axios from "axios";
+import type { PricePoint } from "../types.js";
+
+export interface PriceFeed {
+  getLatest(): Promise<PricePoint>;
+  getCandles?(): Promise<PricePoint[]>;
+}
+
+// Generic feed by REST conventions used widely by data providers:
+type CandleResponse = Array<{ time: number; close: number; timestamp?: number }>;
+
+export class HttpCandlesFeed implements PriceFeed {
+  constructor(
+    private readonly latestUrl: string,
+    private readonly candlesUrl?: string
+  ) {}
+
+  async getLatest(): Promise<PricePoint> {
+    // If candles available, prefer first element as latest; otherwise attempt `latest` style.
+    const r = await axios.get<any>(this.latestUrl, { timeout: 10_000 });
+    const data = r.data;
+    if (typeof data?.price === "number") {
+      return { ts: Date.now(), price: data.price };
+    }
+    if (data?.ticker?.price) {
+      return { ts: Date.now(), price: Number(data.ticker.price) };
+    }
+    if (Array.isArray(data) && typeof data[0] === "number") {
+      return { ts: Date.now(), price: data[0] };
+    }
+    throw new Error(`Unsupported latest response shape at ${this.latestUrl}`);
+  }
+
+  async getCandles(): Promise<PricePoint[]> {
+    if (!this.candlesUrl) {
+      throw new Error("candlesUrl not configured");
+    }
+    const r = await axios.get<CandleResponse>(this.candlesUrl, { timeout: 10_000 });
+    const arr = r.data ?? [];
+    if (!Array.isArray(arr) || arr.length === 0) return [];
+    return arr.map((x) => ({
+      ts: x.time ?? x.timestamp ?? Date.now(),
+      price: Number(x.close)
+    })).filter((p) => Number.isFinite(p.price));
+  }
+}

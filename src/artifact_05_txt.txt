@@ -1,12 +1,21 @@
-+-----------------------+
-       | Residual Asset Drift  |
-       +-----------+-----------+
-                   |
-     Is Delta Value > Swap Threshold?
-            /              \
-         [YES]            [NO]
-          /                  \
-+-------------------+   +--------------------+
-| Execute Single-Hop|   | Deposit Asymmetric |
-| Jup/Direct Routing|   | Single-Sided Range |
-+-------------------+   +--------------------+
++-------------------------------------------------------------------------+
+  |                        SECURITY INVARIANT MATRIX                        |
+  +-----------------------------------+-------------------------------------+
+  | Threat Vector                     | Applied Defense Invariant           |
+  +-----------------------------------+-------------------------------------+
+  | Sandwich / Flash Loan Attack      | Pyth oracle cross-validation        |
+  |                                   | (<= 50 bps deviation check).        |
+  +-----------------------------------+-------------------------------------+
+  | Reentrancy via CPI Cascades       | State mutex flag `is_locked = true` |
+  |                                   | toggled during execution.           |
+  +-----------------------------------+-------------------------------------+
+  | Keeper Key Compromise             | Keeper role restricted solely to    |
+  |                                   | rebalance CPI within tight bands.   |
+  |                                   | Funds cannot leave PDA vault.       |
+  +-----------------------------------+-------------------------------------+
+  | Stale Blockhash & Mempool LVR     | Enforced `deadline` parameter       |
+  |                                   | validated against Clock Sysvar.     |
+  +-----------------------------------+-------------------------------------+
+  | PDA Spoofing & Signer Hijack      | Canonical seeds derivation with     |
+  |                                   | program-derived bump validation.    |
+  +-----------------------------------+-------------------------------------+

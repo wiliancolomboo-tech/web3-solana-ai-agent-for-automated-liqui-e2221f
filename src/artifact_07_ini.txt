@@ -1,0 +1,7 @@
+SOLANA_RPC_URL=https://mainnet.helius-rpc.com/?api-key=YOUR_KEY
+SOLANA_WS_URL=wss://mainnet.helius-rpc.com/?api-key=YOUR_KEY
+JITO_BLOCK_ENGINE_URL=https://mainnet.block-engine.jito.wtf
+WALLET_PRIVATE_KEY=[12,34,56,...] # Array of integers or Base58 format
+WHIRLPOOL_ADDRESS=HJPjoWUrhoZzkNfRpHuieeFk9WcUpjWYNTEisx34Kitf # SOL-USDC Whirlpool
+SLIPPAGE_TOLERANCE_BPS=50 # 0.5%
+JITO_TIP_LAMPORTS=50000 # 0.00005 SOL

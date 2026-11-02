@@ -1,0 +1,7 @@
+kinetic-liquidity integration suite
+    ✔ Initializes the Kinetic Vault with strict oracle parameters (285ms)
+    ✔ Rejects rebalance invocation from an unauthorized signer (142ms)
+    ✔ Rejects inverted or malformed tick boundaries (110ms)
+    ✔ Rejects rebalance attempt prior to cooldown expiration (98ms)
+
+  4 passing (1.8s)

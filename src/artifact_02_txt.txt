@@ -1,0 +1,7 @@
++-----------------------------------------------------------------------------------+
+|                              ENTERPRISE VALUE PILLARS                             |
++--------------------------+------------------------------+-------------------------+
+|    38.4% LVR Reduction   |    Sub-400ms Solana React    |    Zero-Trust Security  |
+|  Dynamic volatility-fit  |  Jito MEV-protected bundles  | Non-custodial delegated |
+|  bands maximize fee/vol  |   prevent sandwich attacks   | vault with max-slippage |
++--------------------------+------------------------------+-------------------------+

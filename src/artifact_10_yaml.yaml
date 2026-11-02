@@ -1,0 +1,24 @@
+version: "3.8"
+
+services:
+  akla-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: akla-rebalance-agent
+    restart: unless-stopped
+    ports:
+      - "9102:9102"
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9102/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"

@@ -1,0 +1,20 @@
+import { Connection, Keypair } from "@solana/web3.js";
+import type { AppConfig, DexAdapter, PoolConfig } from "../types.js";
+import { OrcaAdapter } from "./orcaAdapter.js";
+import { RaydiumAdapter } from "./raydiumAdapter.js";
+import { NoopAdapter } from "./noopAdapter.js";
+
+export function createAdapter(cfg: AppConfig, pool: PoolConfig, conn: Connection): DexAdapter {
+  if (cfg.executionMode === "dry-run") return new NoopAdapter(pool.dex);
+  if (pool.dex === "orca") return new OrcaAdapter(pool.poolAddress, conn);
+  if (pool.dex === "raydium") return new RaydiumAdapter(pool.poolAddress, conn);
+  throw new Error(`Unsupported dex ${pool.dex}`);
+}
+
+export const defaultSigner = (privateKeyBase58: string): Keypair => {
+  // Use Keypair.fromSecretKey(Uint8Array.from([...]) in your infra for compatibility;
+  // this stub keeps compile boundaries clear.
+  const { Keypair } = require("@solana/web3.js");
+  const decoded = (Keypair as any)._keypairFromBase58 ? null : null; // TS workaround when base58 not standardized
+  throw new Error("Implement private key loading according to key storage policy (Vault/HSM/JSON keypair).");
+};

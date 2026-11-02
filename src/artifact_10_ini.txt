@@ -1,0 +1,6 @@
+SOLANA_RPC_URL="https://mainnet.helius-rpc.com/?api-key=YOUR_KEY"
+SOLANA_WSS_URL="wss://mainnet.helius-rpc.com/?api-key=YOUR_KEY"
+GEYSER_ENDPOINT="http://127.0.0.1:10000"
+JITO_BLOCK_ENGINE_URL="https://mainnet.block-engine.jito.wtf"
+AGENT_PRIVATE_KEY="[YOUR_BS58_PRIVATE_KEY]"
+TARGET_WHIRLPOOL="HJPjoWUrhoZzkNfRpHuieeFk9WcUpjwzpnjS2hMQQuEQ"

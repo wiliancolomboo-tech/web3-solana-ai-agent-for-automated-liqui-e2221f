@@ -1,0 +1,30 @@
+{
+  "name": "solana-kinetic-clmm-agent",
+  "version": "1.0.0",
+  "description": "Kinetic Volatility Concentrated Liquidity Rebalancing Agent",
+  "main": "dist/agent.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/agent.js",
+    "test": "ts-node tests/agent.test.ts"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.29.0",
+    "@orca-so/common-sdk": "^0.6.2",
+    "@orca-so/whirlpools-sdk": "^0.13.4",
+    "@pythnetwork/client": "^2.19.0",
+    "@solana/spl-token": "^0.4.1",
+    "@solana/web3.js": "^1.91.4",
+    "axios": "^1.6.8",
+    "bn.js": "^5.2.1",
+    "decimal.js": "^10.4.3",
+    "dotenv": "^16.4.5",
+    "winston": "^3.13.0"
+  },
+  "devDependencies": {
+    "@types/bn.js": "^5.1.5",
+    "@types/node": "^20.11.30",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.3"
+  }
+}

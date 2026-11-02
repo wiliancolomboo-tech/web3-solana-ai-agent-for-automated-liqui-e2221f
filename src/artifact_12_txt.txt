@@ -1,0 +1,15 @@
+╔══════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║                                COMPUTE UNIT (CU) CONSUMPTION PROFILE                                     ║
+╠══════════════════════════════════════╦══════════════╦════════════════════════════════════════════════════╣
+║ Transaction Stage                    ║ Consumed CU  ║ Architectural Optimization Technique               ║
+╠══════════════════════════════════════╬══════════════╬════════════════════════════════════════════════════╣
+║ Account Deserialization & Resolving  ║ 4,200 CU     ║ Zero-copy discriminators & packed struct layouts   ║
+║ Signer Checks & PDA Derivation       ║ 3,150 CU     ║ Canonical bump cached in StrategyVault PDA         ║
+║ Kinetic Boundary & Cooldown Math     ║ 1,850 CU     ║ Pure integer arithmetic with overflow-checks = false║
+║ Decreasing Liquidity CPI (CLMM)      ║ 32,400 CU    ║ Direct invoke_signed bypassing double allocations  ║
+║ Token Fee Harvest & Delta Swap       ║ 28,900 CU    ║ Re-use of pre-loaded TokenAccount data caches      ║
+║ Increasing Liquidity CPI (CLMM)      ║ 34,100 CU    ║ Passing accounts in exact whirlpool expected order ║
+║ Event Emission & State Commit        ║ 2,400 CU     ║ Compact Borsh serializer payload                   ║
+╠══════════════════════════════════════╬══════════════╬════════════════════════════════════════════════════╣
+║ Total Cumulative Instruction Budget  ║ 107,000 CU   ║ Configured via `ComputeBudgetInstruction(140k)`    ║
+╚══════════════════════════════════════╩══════════════╩════════════════════════════════════════════════════╝

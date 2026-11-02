@@ -1,0 +1,47 @@
+import { describe, expect, it } from "vitest";
+import { RebalancePolicy } from "../policy/rebalance";
+import type { PoolConfig, KineticSignal, PositionSnapshot } from "../types";
+
+describe("RebalancePolicy", () => {
+  const pool: PoolConfig = {
+    id: "SOL-USDC",
+    dex: "orca",
+    symbol: "SOL-USDC",
+    poolAddress: "x",
+    tokenA: "SOL",
+    tokenB: "USDC",
+    poolLabel: "orca",
+    priceFeedUrl: "https://example.test",
+    active: true,
+    baseWidthBps: 200,
+    minWidthBps: 100,
+    maxWidthBps: 2000,
+    maxLiquidityChangeBps: 250,
+    cooldownSeconds: 900,
+    maxRebalancesPerDay: 30
+  };
+
+  const pos: PositionSnapshot = {
+    positionAddress: "p",
+    liquidity: 1000,
+    lowerPrice: 100,
+    upperPrice: 110,
+    inRange: true,
+    spotPrice: 105
+  } as any;
+
+  it("returns noop when low kinetic score", () => {
+    const policy = new RebalancePolicy(0.8);
+    const sig = { ok: true, kineticScore: 0.2, momentum: 0.001, longEmaRet: 0.01, shortEmaRet: 0.02, velocity: 0.01, acceleration: 0.001, realizedVol: 0.005 } as KineticSignal;
+    const plan = policy.decide({ pool, signal: sig, position: pos, minSignalStrength: 0.8 });
+    expect(plan.shouldRebalance).toBe(false);
+  });
+
+  it("proposes rebalance when high kinetic", () => {
+    const policy = new RebalancePolicy(0.01);
+    const sig = { ok: true, kineticScore: 1.2, momentum: 0.004, longEmaRet: 0.001, shortEmaRet: 0.004, velocity: 0.004, acceleration: 0.006, realizedVol: 0.02 } as KineticSignal;
+    const plan = policy.decide({ pool, signal: sig, position: pos, minSignalStrength: 0.01 });
+    expect(plan.shouldRebalance).toBe(true);
+    expect(plan.targetUpperPrice).toBeGreaterThan(plan.targetLowerPrice);
+  });
+});

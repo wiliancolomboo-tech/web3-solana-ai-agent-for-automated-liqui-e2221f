@@ -1,0 +1,34 @@
+flowchart TD
+    subgraph MarketData [Data Ingestion & Microstructure Engine]
+        A1[Solana RPC / Geyser WebSocket] -->|Tick Arrays & Trades| B1[Ingestion Pipeline]
+        A2[Pyth Network TWAP Oracle] -->|Independent Price Feed| B1
+        B1 --> C1[Kinetic Volatility Engine]
+        C1 -->|Compute Velocity & Volume Weight| D1{Regime Decision Engine}
+    end
+
+    subgraph DecisionMatrix [Agent Strategy Engine]
+        D1 -->|Threshold Met: Delta > Band Margin| E1[Tick Boundary Optimizer]
+        D1 -->|Kinetic Shock Detected| E2[Emergency Asymmetric Defense]
+        D1 -->|In Equilibrium| E3[Hold & Compound Fees]
+        E1 --> F1[Payload Synthesizer]
+        E2 --> F1
+    end
+
+    subgraph SolanaExecution [On-Chain Kinesis Program]
+        F1 --> G1[Jito-Solana MEV Bundle Engine]
+        G1 -->|Direct Validator Route| H1[Kinesis Anchor Vault]
+        H1 -->|Verify Oracle Price Deviation| I1{Safety Constraints Passed?}
+        I1 -->|No: Slippage/Cooldown Breach| J1[Revert & Emit Alert]
+        I1 -->|Yes: Valid Parameters| K1[Withdraw Liquidity from Orca/Raydium]
+        K1 --> L1[Execute Rebalancing Swap if needed]
+        L1 --> M1[Mint New Concentrated Liquidity Position]
+    end
+
+    subgraph EnterpriseOps [Enterprise Notification & Telemetry]
+        K1 --> N1[Agent Event Collector]
+        M1 --> N1
+        J1 --> N1
+        N1 --> O1[Resend Audit Email Service]
+        N1 --> O2[Slack/Discord Security Webhook]
+        N1 --> O3[Prometheus & Grafana Exporter]
+    end

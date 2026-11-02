@@ -1,0 +1,126 @@
+import { CronJob } from "cron";
+import { Connection } from "@solana/web3.js";
+import { KineticIndicator } from "./indicators/kinetic.js";
+import { RebalancePolicy } from "./policy/rebalance.js";
+import { HttpCandlesFeed } from "./price/priceFeed.js";
+import { StateStore } from "./storage.js";
+import { createAdapter } from "./adapters/interface.js";
+import { Executor } from "./executor.js";
+import type { AppConfig, PoolConfig, KineticSignal } from "./types.js";
+import pino from "pino";
+
+const log = pino({ level: process.env.LOG_LEVEL || "info" });
+
+export class RebalanceMonitor {
+  private conn: Connection;
+  private adapters = new Map<string, ReturnType<typeof createAdapter>>();
+  private feeds = new Map<string, HttpCandlesFeed>();
+  private indicators = new Map<string, KineticIndicator>();
+
+  private readonly policy: RebalancePolicy;
+
+  constructor(
+    private readonly cfg: AppConfig,
+    private readonly store: StateStore,
+    private readonly exec: Executor
+  ) {
+    this.conn = new Connection(cfg.rpcUrl, { commitment: "confirmed" });
+    this.policy = new RebalancePolicy(cfg.minSignalStrength);
+    for (const p of cfg.pools) {
+      this.adapters.set(p.id, createAdapter(cfg, p, this.conn));
+      this.feeds.set(p.id, new HttpCandlesFeed(p.priceFeedUrl, p.candlesUrl));
+      this.indicators.set(p.id, new KineticIndicator(600, 14, 80, 35));
+    }
+  }
+
+  start(): void {
+    const job = new CronJob(`*/${this.cfg.pollSeconds} * * * * *`, () => this.tick().catch((e) => log.error(e, "tick_error")));
+    job.start();
+    log.info("monitor_started");
+  }
+
+  private async tick() {
+    for (const pool of this.cfg.pools.filter((p) => p.active)) {
+      await this.tickPool(pool).catch((e) => log.error({ err: e, pool: pool.id }, "pool_tick_error"));
+    }
+  }
+
+  private async tickPool(pool: PoolConfig) {
+    const adapter = this.adapters.get(pool.id);
+    const feed = this.feeds.get(pool.id);
+    const indicator = this.indicators.get(pool.id);
+    if (!adapter || !feed || !indicator) throw new Error(`missing components for ${pool.id}`);
+
+    // 1) get price and signal
+    let point = await feed.getLatest();
+    const signal: KineticSignal = indicator.push(point.price, point.ts);
+
+    // 2) guard stale/insufficient
+    if (!signal.ok) {
+      log.info({ pool: pool.id, price: point.price }, "insufficient_data");
+      return;
+    }
+
+    // 3) position snapshot from DEX state
+    const pos = await adapter.fetchPosition(pool.positionAddress || pool.poolAddress);
+
+    // 4) policy decision
+    const plan = this.policy.decide({ pool, signal, position: pos, minSignalStrength: this.cfg.minSignalStrength });
+
+    if (!plan.shouldRebalance) {
+      log.info({ pool: pool.id, reason: plan.reason }, "no_rebalance");
+      return;
+    }
+
+    // 5) risk checks
+    if (!(await this.canExecuteNow(pool.id, plan, pos))) {
+      log.warn({ pool: pool.id, reason: plan.reason }, "risk_gate_reject");
+      return;
+    }
+
+    // 6) execute
+    const sig = await this.exec.execute(pool.id, adapter, plan);
+
+    // 7) record
+    this.store.writeAction(
+      {
+        poolId: pool.id,
+        ts: Date.now(),
+        slot: pos.updatedSlot ?? 0,
+        reason: plan.reason,
+        kineticScore: plan.expectedKineticScore
+      },
+      sig
+    );
+
+    log.info({ pool: pool.id, sig, plan }, "rebalance_submitted");
+  }
+
+  private async canExecuteNow(poolId: string, plan: any, pos: any): Promise<boolean> {
+    const now = Date.now();
+    const lastTs = this.store.lastActionTs(poolId);
+    const p = this.cfg.pools.find((x) => x.id === poolId);
+    if (!p) return false;
+
+    if (lastTs && (now - lastTs) < p.cooldownSeconds * 1000) {
+      return false;
+    }
+
+    const todayStart = now - 24 * 3600 * 1000;
+    const count = this.store.countActionsSince(poolId, todayStart);
+    if (count >= p.maxRebalancesPerDay) {
+      return false;
+    }
+
+    // Avoid nonsensical range inversion
+    if (plan.targetUpperPrice <= plan.targetLowerPrice) return false;
+
+    // Avoid runaway width change > 10x
+    const maxW = (p.maxWidthBps - p.minWidthBps) / 10000;
+    const currW = (pos.upperPrice - pos.lowerPrice) / pos.lowerPrice;
+    const newW = (plan.targetUpperPrice - plan.targetLowerPrice) / plan.targetLowerPrice;
+    if (currW > 0 && newW / currW > 10) return false;
+
+    return true;
+  }
+}

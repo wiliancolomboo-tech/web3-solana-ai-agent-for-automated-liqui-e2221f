@@ -1,0 +1,31 @@
+version: "3.8"
+
+services:
+  kinetic-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kinetic-rebalance-worker
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - LOG_LEVEL=info
+      - SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+      - KEEPER_KEYPAIR_PATH=/secrets/keeper.json
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - OPERATIONAL_REPORT_EMAIL=${OPERATIONAL_REPORT_EMAIL}
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
+    volumes:
+      - ./secrets:/secrets:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:8080/healthz', (r)=>{if(r.statusCode!==200)process.exit(1);})"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"

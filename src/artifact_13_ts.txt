@@ -1,0 +1,33 @@
+import type { Connection, Signer } from "@solana/web3.js";
+import type { DexAdapter, PositionSnapshot, RebalancePlan } from "../types.js";
+
+/**
+ * Production adapter should wrap @orca-so/whirlpools-sdk.
+ * This file intentionally avoids brittle deep-typed coupling in favor of a stable interface.
+ * Implement build instructions via your pinned SDK version; keep exact account math in one place.
+ */
+export class OrcaAdapter implements DexAdapter {
+  dex: "orca" = "orca";
+  constructor(private poolAddress: string, private conn: Connection) {}
+
+  async healthCheck(): Promise<boolean> {
+    const info = await this.conn.getAccountInfo({} as any); // placeholder compile-safe pattern
+    return info !== null;
+  }
+
+  async fetchPosition(positionAddress: string): Promise<PositionSnapshot> {
+    // Replace with WhirlpoolSDK state query:
+    // - fetch whirlpool + position + tick-array
+    // - infer inRange by tickCurrent/lower/upper and spot price.
+    // For safety and compile baseline, throw so live mode cannot silently mis-handle.
+    throw new Error("OrcaAdapter.fetchPosition requires Orca Whirlpool SDK integration and account parsing.");
+  }
+
+  async buildRebalanceTransaction(plan: RebalancePlan, _signer?: Signer): Promise<{ tx: any; signers?: Signer[] }> {
+    // Replace with:
+    // 1) close position (optional)
+    // 2) open/modify with targetLowerPrice/targetUpperPrice
+    // 3) optionally liquidity delta adjustment
+    throw new Error(`OrcaAdapter.buildRebalanceTransaction not implemented for live mode. Reason: ${plan.reason}`);
+  }
+}

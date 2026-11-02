@@ -1,0 +1,7 @@
+### 4.3 Production enable
+- Set `DRY_RUN=false`.
+- Confirm wallet permissions and DEX position ownership.
+- Enable signed simulation + alerting.
+- Set tighter limits initially (`maxRebalancesPerHour`, `cooldownSeconds`).
+
+### 4.4 Docker

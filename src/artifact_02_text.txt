@@ -1,0 +1,20 @@
+kinetic-rebalancer/
+├── Anchor.toml
+├── Cargo.toml
+├── programs/
+│   └── kinetic-rebalancer/
+│       ├── Cargo.toml
+│       └── src/
+│           ├── errors.rs
+│           ├── instructions/
+│           │   ├── initialize.rs
+│           │   ├── deposit.rs
+│           │   ├── mod.rs
+│           │   └── rebalance.rs
+│           ├── state.rs
+│           └── lib.rs
+├── agent/
+│   ├── kinetic_agent.py
+│   └── requirements.txt
+└── tests/
+    └── kinetic-rebalancer.ts

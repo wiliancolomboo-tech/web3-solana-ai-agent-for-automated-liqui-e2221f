@@ -1,0 +1,13 @@
+┌───────────────────────┬─────────────────────────────────────────────────────────────┐
+   │ Threat Vector         │ Protocol Defense Mechanism                                  │
+   ├───────────────────────┼─────────────────────────────────────────────────────────────┤
+   │ Sandwich / MEV Front  │ Jito Block Engine bundles; zero exposure to public mempool  │
+   ├───────────────────────┼─────────────────────────────────────────────────────────────┤
+   │ Adverse Churning      │ Micro-acceleration threshold gates rebalancing triggers     │
+   ├───────────────────────┼─────────────────────────────────────────────────────────────┤
+   │ Reentrancy Attacks    │ Strict transient reentrancy lock status (1=Open, 2=Locked)  │
+   ├───────────────────────┼─────────────────────────────────────────────────────────────┤
+   │ Fake Account Poisoning│ Canonical PDA seed derivations with verified program seeds  │
+   ├───────────────────────┼─────────────────────────────────────────────────────────────┤
+   │ Flash Crash Spikes    │ Static ceiling MAX_ALLOWED_KINETIC_DEVIATION_BPS (2500 bps) │
+   └───────────────────────┴─────────────────────────────────────────────────────────────┘

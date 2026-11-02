@@ -1,0 +1,8 @@
+KineticFlow Autonomous Rebalancer Suite
+    ✔ 1. Initializes the Kinetic Strategy Vault with Correct PDAs (284ms)
+    ✔ 2. Deposits Liquidity into Strategy Vault (195ms)
+    ✔ 3. Executes AI Rebalancing with Kinetic Volatility Proof (1180ms)
+    ✔ 4. Rejects Rebalance if Non-Operator Key Attempts Execution (142ms)
+    ✔ 5. Rejects Execution Violating Tick Spacing Constraints (110ms)
+
+  5 passing (2.1s)

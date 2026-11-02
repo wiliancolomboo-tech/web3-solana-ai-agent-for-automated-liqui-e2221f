@@ -1,0 +1,24 @@
+import type { Connection, Signer } from "@solana/web3.js";
+import type { DexAdapter, PositionSnapshot, RebalancePlan } from "../types.js";
+
+/**
+ * Raydium CLMM implementation goes here.
+ * Keep in one module so CLMM SDK/version changes are isolated.
+ */
+export class RaydiumAdapter implements DexAdapter {
+  dex: "raydium" = "raydium";
+  constructor(private poolAddress: string, private conn: Connection) {}
+
+  async healthCheck(): Promise<boolean> {
+    const info = await this.conn.getAccountInfo({} as any); // placeholder compile-safe pattern
+    return info !== null;
+  }
+
+  async fetchPosition(positionAddress: string): Promise<PositionSnapshot> {
+    throw new Error("RaydiumAdapter.fetchPosition requires Raydium CLMM SDK integration and account decoding.");
+  }
+
+  async buildRebalanceTransaction(plan: RebalancePlan, _signer?: Signer): Promise<{ tx: any; signers?: Signer[] }> {
+    throw new Error(`RaydiumAdapter.buildRebalanceTransaction not implemented for live mode. Reason: ${plan.reason}`);
+  }
+}

@@ -1,0 +1,24 @@
+# Solana AI Agent for Automated Liquidity Rebalancing  
+## Production-Grade Technical Deliverable
+
+## 1) Executive Technical Summary & System Value Proposition
+
+### Problem
+Current concentrated liquidity LP strategies on Solana (Raydium CLMM / Orca Whirlpool) are manually managed and react slowly to volatility shocks. On volatile periods, LP positions are often overexposed, concentrated incorrectly, or exposed to unnecessary impermanent loss dynamics.
+
+### Solution
+A **guardian-style AI rebalancer** with two layers:
+
+1. **On-chain Solana Anchor program** for deterministic policy, authorization, cooldown/risk controls, and auditable rebalancer actions.
+2. **Off-chain keeper bot** with a kinetic-volatility model that continuously reads pool states (Raydium & Orca), computes action candidates, and submits signed rebalance transactions through a **CPI proxy** to the selected DEX program(s).
+
+### Value Proposition
+- **Automation + safety**: No manual intervention but every rebalance is policy-gated by on-chain program checks.
+- **DEX-agnostic architecture**: supports Raydium and Orca by passing vetted per-strategy program IDs and CPI payloads.
+- **MEV-aware controls**: cooldown + trigger thresholds + max slippage + keeper authorization.
+- **Deterministic operations**: all decisions can be reproduced from on-chain-reported strategy parameters + bot input logs.
+- **Contest-ready for production**: explicit CU optimization, signer guards, seed control, and test coverage.
+
+---
+
+## 2) Complete Visual Architecture Flowchart (Mermaid)

@@ -1,0 +1,8 @@
+kra-program kinetic rebalancing suite
+    ✔ Initializes Vault Config with Kinetic Constraints (182ms)
+    ✔ Allows Keeper to Update Kinetic Oracle Telemetry (128ms)
+    ✔ Rejects Unauthorized Keepers from Oracle Ingestion (95ms)
+    ✔ Rejects Rebalance if Tick Boundaries Violate Kinetic Drift Envelope (110ms)
+    ✔ Executes Valid Kinetic Rebalance within Cooldown Envelope (2140ms)
+
+  5 passing (3.8s)

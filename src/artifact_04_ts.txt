@@ -1,0 +1,153 @@
+import * as anchor from "@coral-xyz/anchor";
+import { Program } from "@coral-xyz/anchor";
+import { expect } from "chai";
+
+describe("kinetic-rebalancer", () => {
+  const provider = anchor.AnchorProvider.env();
+  anchor.setProvider(provider);
+
+  const program = anchor.workspace.KineticRebalancer as Program<any>;
+  const payer = provider.wallet;
+  const keeper = anchor.web3.Keypair.generate();
+  const owner = anchor.web3.Keypair.generate();
+
+  const GLOBAL_SEED = Buffer.from("global");
+  const POSITION_SEED = Buffer.from("position");
+  const raydiumProgram = new anchor.web3.PublicKey("RAYd111111111111111111111111111111111111111");
+  const orcaProgram = new anchor.web3.PublicKey("Orca111111111111111111111111111111111111111");
+
+  let globalPda: anchor.web3.PublicKey;
+  let positionPda: anchor.web3.PublicKey;
+
+  const nonce = BigInt(1);
+
+  before(async () => {
+    [globalPda] = await anchor.web3.PublicKey.findProgramAddress(
+      [GLOBAL_SEED],
+      program.programId
+    );
+
+    const sig = await provider.connection.requestAirdrop(owner.publicKey, 2 * anchor.web3.LAMPORTS_PER_SOL);
+    await provider.connection.confirmTransaction(sig);
+
+    const sig2 = await provider.connection.requestAirdrop(keeper.publicKey, 2 * anchor.web3.LAMPORTS_PER_SOL);
+    await provider.connection.confirmTransaction(sig2);
+  });
+
+  it("initializes global config", async () => {
+    await program.methods
+      .initializeGlobal(raydiumProgram, orcaProgram, payer.publicKey, new anchor.BN(180), new anchor.BN(120))
+      .accounts({
+        global: globalPda,
+        authority: payer.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .rpc();
+
+    const g = await program.account.globalConfig.fetch(globalPda);
+    expect(g.admin.toBase58()).to.eq(payer.publicKey.toBase58());
+    expect(g.paused).to.eq(false);
+  });
+
+  it("registers position", async () => {
+    const pool = anchor.web3.Keypair.generate().publicKey;
+    const protocolPosition = anchor.web3.Keypair.generate().publicKey;
+    const vaultA = anchor.web3.Keypair.generate().publicKey;
+    const vaultB = anchor.web3.Keypair.generate().publicKey;
+    const mintA = anchor.web3.Keypair.generate().publicKey;
+    const mintB = anchor.web3.Keypair.generate().publicKey;
+
+    [positionPda] = await anchor.web3.PublicKey.findProgramAddress(
+      [POSITION_SEED, owner.publicKey.toBuffer(), pool.toBuffer(), anchor.utils.bytes.leBufferify(Number(nonce), 8)],
+      program.programId
+    );
+
+    await program.methods
+      .registerPosition(
+        nonce,
+        { orca: {} },                  // protocol enum as in IDL
+        orcaProgram,
+        pool,
+        protocolPosition,
+        vaultA,
+        vaultB,
+        mintA,
+        mintB,
+        -2000,
+        2000,
+        350,
+        new anchor.BN(180),
+        400,
+        keeper.publicKey
+      )
+      .accounts({
+        global: globalPda,
+        position: positionPda,
+        owner: owner.publicKey,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      })
+      .signers([owner])
+      .rpc();
+
+    const p = await program.account.managedPosition.fetch(positionPda);
+    expect(p.keeper.toBase58()).to.eq(keeper.publicKey.toBase58());
+  });
+
+  it("rejects unauthorized keeper propose", async () => {
+    const other = anchor.web3.Keypair.generate();
+    const sig = await provider.connection.requestAirdrop(other.publicKey, anchor.web3.LAMPORTS_PER_SOL);
+    await provider.connection.confirmTransaction(sig);
+
+    let err = null;
+    try {
+      await program.methods
+        .proposeRebalance(new anchor.BN(2), -2200, 2200, 400, new anchor.BN(30))
+        .accounts({ global: globalPda, position: positionPda, keeper: other.publicKey })
+        .signers([other])
+        .rpc();
+    } catch (e: any) {
+      err = e;
+    }
+    expect(err).to.not.eq(null);
+  });
+
+  it("allows keeper to propose and pause/unauthorize correctly", async () => {
+    await program.methods
+      .proposeRebalance(new anchor.BN(2), -2400, 2400, 420, new anchor.BN(30))
+      .accounts({ global: globalPda, position: positionPda, keeper: keeper.publicKey })
+      .signers([keeper])
+      .rpc();
+
+    const p = await program.account.managedPosition.fetch(positionPda);
+    expect(p.pendingNonce.toNumber()).to.eq(2);
+    expect(p.state).to.eq(2); // Pending
+  });
+
+  it("rejects execute if cooldown not elapsed", async () => {
+    let err = null;
+    try {
+      await program.methods
+        .executeRebalance(Array(32).fill(0), 4, 3000, Buffer.from([0, 0, 0]))
+        .accounts({
+          global: globalPda,
+          position: positionPda,
+          vaultAuthority: (await anchor.web3.PublicKey.findProgramAddress(
+              [Buffer.from("vault"), positionPda.toBuffer()], program.programId))[0],
+          keeper: keeper.publicKey,
+          protocolPosition: anchor.web3.Keypair.generate().publicKey,
+          pool: anchor.web3.PublicKey.default,
+          vaultTokenA: anchor.web3.Keypair.generate().publicKey,
+          vaultTokenB: anchor.web3.Keypair.generate().publicKey,
+          protocolProgram: orcaProgram,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        })
+        .remainingAccounts([])
+        .signers([keeper])
+        .rpc();
+    } catch (e: any) {
+      err = e;
+    }
+    expect(err).to.not.eq(null);
+  });
+
+});

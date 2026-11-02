@@ -1,0 +1,60 @@
+import "dotenv/config";
+import { z } from "zod";
+import fs from "node:fs";
+import path from "node:path";
+import type { AppConfig, PoolConfig } from "./types.js";
+
+const PoolSchema = z.object({
+  id: z.string(),
+  dex: z.enum(["orca", "raydium"]),
+  symbol: z.string(),
+  poolAddress: z.string(),
+  positionAddress: z.string().optional(),
+  tokenA: z.string(),
+  tokenB: z.string(),
+  poolLabel: z.string(),
+  priceFeedUrl: z.string().url(),
+  candlesUrl: z.string().url().optional(),
+  active: z.boolean().default(true),
+  baseWidthBps: z.number().int().positive(),
+  minWidthBps: z.number().int().positive(),
+  maxWidthBps: z.number().int().positive(),
+  maxLiquidityChangeBps: z.number().int().positive(),
+  cooldownSeconds: z.number().int().positive(),
+  maxRebalancesPerDay: z.number().int().positive()
+});
+
+const EnvSchema = z.object({
+  RPC_URL: z.string().url(),
+  WS_RPC_URL: z.string().url(),
+  EXECUTION_MODE: z.enum(["dry-run", "live"]).default("dry-run"),
+  PRIVATE_KEY_BASE58: z.string().min(20).default(""),
+  MIN_SIGNAL_STRENGTH: z.coerce.number().default(0.55),
+  MAX_SLIPPAGE_BPS: z.coerce.number().int().default(100),
+  MAX_RETRIES: z.coerce.number().int().default(4),
+  POLL_SECONDS: z.coerce.number().int().default(30),
+  DB_PATH: z.string().default("./state.db"),
+  POOLS_CONFIG_PATH: z.string().default("./pools.example.json")
+});
+
+export function loadConfig(): AppConfig {
+  const env = EnvSchema.parse(process.env);
+
+  const cfgPath = path.resolve(process.cwd(), env.POOLS_CONFIG_PATH);
+  if (!fs.existsSync(cfgPath)) throw new Error(`Pools config not found: ${cfgPath}`);
+  const rawPools = JSON.parse(fs.readFileSync(cfgPath, "utf8"));
+  const pools = z.array(PoolSchema).parse(rawPools);
+
+  return {
+    rpcUrl: env.RPC_URL,
+    wsRpcUrl: env.WS_RPC_URL,
+    executionMode: env.EXECUTION_MODE,
+    privateKeyBase58: env.PRIVATE_KEY_BASE58,
+    minSignalStrength: env.MIN_SIGNAL_STRENGTH,
+    maxSlippageBps: env.MAX_SLIPPAGE_BPS,
+    maxRetries: env.MAX_RETRIES,
+    pollSeconds: env.POLL_SECONDS,
+    dbPath: env.DB_PATH,
+    pools
+  };
+}

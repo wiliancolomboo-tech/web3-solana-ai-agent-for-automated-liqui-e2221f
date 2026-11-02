@@ -1,0 +1,38 @@
+import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import type { DexAdapter, PositionSnapshot, RebalancePlan } from "../types.js";
+
+export class NoopAdapter implements DexAdapter {
+  dex = "orca" as const;
+  constructor(d: "orca" | "raydium") { this.dex = d; }
+
+  async healthCheck(): Promise<boolean> {
+    return true;
+  }
+
+  async fetchPosition(_positionAddress: string): Promise<PositionSnapshot> {
+    const now = Date.now();
+    return {
+      positionAddress: "noop",
+      liquidity: 1,
+      lowerPrice: 1,
+      upperPrice: 1.1,
+      inRange: true,
+      spotPrice: 1,
+      version: 0,
+      updatedSlot: 0
+    };
+  }
+
+  async buildRebalanceTransaction(_plan: RebalancePlan): Promise<{ tx: any; signers?: any[] }> {
+    // Return inert transaction for dry-run compatibility.
+    return {
+      tx: {
+        isNoop: true,
+        instructions: [],
+        feePayer: null,
+        recentBlockhash: null,
+        sign: () => {}
+      }
+    };
+  }
+}

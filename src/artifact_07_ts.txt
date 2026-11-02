@@ -1,0 +1,8 @@
+// in TS scripts/cli or JS snippet
+await program.methods.initializeGlobal(
+  RAYDIUM_PROGRAM_ID,
+  ORCA_PROGRAM_ID,
+  EMERGENCY_ADMIN,
+  new BN(150),  // min interval slots
+  new BN(120)   // max signal ttl secs
+).accounts({ global: GLOBAL_PDA, authority: admin.publicKey }).rpc();

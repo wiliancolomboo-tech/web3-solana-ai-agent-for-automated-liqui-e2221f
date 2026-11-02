@@ -1,0 +1,11 @@
+RPC_URL=https://api.mainnet-beta.solana.com
+WS_RPC_URL=wss://api.mainnet-beta.solana.com
+EXECUTION_MODE=dry-run
+PRIVATE_KEY_BASE58=
+MIN_SIGNAL_STRENGTH=0.55
+MAX_SLIPPAGE_BPS=100
+MAX_RETRIES=4
+POLL_SECONDS=30
+DB_PATH=./state.db
+POOLS_CONFIG_PATH=./pools.example.json
+LOG_LEVEL=info

@@ -1,0 +1,6 @@
+[*] Starting Kinetic Keeper Agent for Program: Kinet1cReba1ance111111111111111111111111111
+[SLOT 1042] Price: 150.0000 | Velocity: +0.0000 | Energy: 0.000000 | Suggested Ticks: [-64, 64] | Trigger: False
+[SLOT 1043] Price: 151.2410 | Velocity: +0.0082 | Energy: 0.000168 | Suggested Ticks: [-64, 64] | Trigger: False
+[SLOT 1044] Price: 153.8920 | Velocity: +0.0210 | Energy: 0.052190 | Suggested Ticks: [0, 192]   | Trigger: True
+[EXECUTOR] Dispatching Kinetic Rebalance: [0 <-> 192]
+[CONFIRMED] Signature: 4Z3j8mGv...V9s7

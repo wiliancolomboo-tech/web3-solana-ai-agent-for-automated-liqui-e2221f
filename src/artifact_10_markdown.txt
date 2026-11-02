@@ -1,0 +1,8 @@
+Title: KineticMesh - Autonomous AI Liquidity Agent on Solana
+Category: Solana AI Agent & DeFi Automation
+Elevator Pitch: 
+"Static concentrated liquidity leaves millions in fees on the table while exposing LPs 
+to massive Loss-Versus-Rebalancing (LVR). KineticMesh is an autonomous agent that models 
+Garman-Klass kinetic volatility and microstructural order flow off-chain, re-centering 
+Orca and Raydium concentrated liquidity positions atomically using Pyth-anchored safety 
+guards on Solana."

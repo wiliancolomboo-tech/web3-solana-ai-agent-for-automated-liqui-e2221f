@@ -1,0 +1,8 @@
+kinetic-rebalancer test suite
+    ✔ QA-01: Correctly initializes the rebalancing vault with PDA validation (420ms)
+    ✔ QA-02: Enforces kinetic rebalance authorization (reverts on unauthorized keeper) (85ms)
+    ✔ QA-03: Executes valid kinetic rebalance within parameters (192ms)
+    ✔ QA-04: Enforces cooldown period between rebalancing triggers (78ms)
+    ✔ QA-05: Enforces invariant check on invalid tick ranges (lower >= upper) (6102ms)
+
+  5 passing (6.9s)

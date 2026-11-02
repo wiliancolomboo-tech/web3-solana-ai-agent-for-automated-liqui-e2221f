@@ -1,0 +1,8 @@
+[Bootstrap] Initializing Kinetic Agent for wallet: 4vW...8Z1
+[Bootstrap] Monitoring Target Pool: HJPjoWUrhoZzkNfRpHuieeFh9WcDNwpWB9GQB1MmCxwd
+[KineticEngine] Velocity: 0.000341 | Energy: 0.8412 | GKYZ Vol: 3.42% | Bias: 0.12
+[RebalanceOrchestrator] Position healthy. Within kinetic equilibrium bounds.
+[KineticEngine] Velocity: 0.004912 | Energy: 3.9812 | GKYZ Vol: 8.91% | Bias: 0.89
+[RebalanceOrchestrator] Kinetic trigger tripped. Executing Jito atomic rebalance...
+[OpenPosition] Range: [-18200 -> -15400] for Price: 146.4215
+[Rebalance] Atomic rebalance executed via Jito Bundle: b78f192b0c19a...

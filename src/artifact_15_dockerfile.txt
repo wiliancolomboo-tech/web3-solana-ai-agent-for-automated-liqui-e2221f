@@ -1,0 +1,28 @@
+FROM node:20-slim AS builder
+
+WORKDIR /usr/src/app
+COPY agent/package*.json ./
+RUN npm ci
+
+COPY agent/tsconfig.json ./
+COPY agent/src ./src
+RUN npm run build
+
+FROM node:20-slim AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+COPY agent/package*.json ./
+RUN npm ci --only=production
+
+COPY --from=builder /usr/src/app/dist ./dist
+
+# Create mount point for Keeper Keypair secret
+VOLUME ["/secrets"]
+
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:8080/healthz', (res) => { if (res.statusCode !== 200) process.exit(1); });"
+
+USER node
+CMD ["node", "dist/index.js"]

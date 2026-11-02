@@ -1,0 +1,7 @@
+202X-XX-XX 14:10:01 [INFO] Starting Autonomous Kinetic Volatility Loop on Solana...
+202X-XX-XX 14:10:02 [DEBUG] Slot: 284102910 | Price: 153.12 | v: 0.0012 | a: 0.0004 | E_k: 1.204500e-05
+202X-XX-XX 14:10:03 [DEBUG] Slot: 284102911 | Price: 155.80 | v: 0.0175 | a: 0.0163 | E_k: 5.120900e-04
+202X-XX-XX 14:10:03 [WARNING] Kinetic threshold exceeded: 5.120900e-04 >= 4.500000e-04
+202X-XX-XX 14:10:03 [INFO] ⚡ [TRIGGER REBALANCE] Kinetic Energy=5.120900e-04 | Target Ticks: [4320, 6840]
+202X-XX-XX 14:10:04 [INFO] Executing transaction through RPC/Jito bundle with keeper signer...
+202X-XX-XX 14:10:04 [INFO] ✅ Rebalance transaction finalized successfully on-chain. Tx: 4Xv9...8Qpz

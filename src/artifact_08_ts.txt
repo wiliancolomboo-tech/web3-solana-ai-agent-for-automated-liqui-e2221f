@@ -1,0 +1,16 @@
+await program.methods.registerPosition(
+  new BN(1),                 // nonce
+  { orca: {} },              // or { raydium: {} }
+  ORCA_PROGRAM_ID,
+  POOL_PUBKEY,
+  POSITION_ACCOUNT,
+  VAULT_A,
+  VAULT_B,
+  MINT_A,
+  MINT_B,
+  -2000, 2000,               // initial range
+  250,                       // vol threshold bps
+  new BN(180),               // cooldown slots
+  400,                       // target width
+  keeper.publicKey
+).accounts({...}).rpc();

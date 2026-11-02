@@ -1,8 +1,13 @@
-# Clone & install dependencies
-npm install @orca-so/whirlpools-sdk @orca-so/common-sdk @solana/web3.js @coral-xyz/anchor decimal.js axios dotenv
+# 1. Clone & Install Dependencies
+npm install -g @coral-xyz/anchor-cli
+npm install
 
-# Compile TypeScript
-npm run build
+# 2. Build Anchor Smart Contracts
+anchor build
 
-# Launch Agent under Process Supervisor (PM2 / Systemd)
-pm2 start dist/rebalancer_agent.js --name "solana-clmm-agent" --time
+# 3. Deploy to Solana Devnet / Mainnet
+solana config set --url https://api.devnet.solana.com
+anchor deploy --provider.cluster devnet
+
+# 4. Run Off-Chain Kinetic Rebalancer Agent
+npm run start:agent

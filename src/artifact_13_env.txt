@@ -1,0 +1,7 @@
+SOLANA_RPC_URL="https://api.mainnet-beta.solana.com"
+SOLANA_WS_URL="wss://api.mainnet-beta.solana.com"
+KEEPER_PRIVATE_KEY="[...json-byte-array...]"
+JITO_RELAYER_URL="https://mainnet.block-engine.jito.wtf/api/v1/bundles"
+STRATEGY_PROGRAM_ID="K1nEt1cReba1ance111111111111111111111111111"
+TARGET_POOL_ADDRESS="CAMMCzo5YL8w4VFF8KVHrK22GGUsp5VTaW7grrKgrWqK"
+PYTH_ORACLE_PRICE_FEED="H6ARHf6YXhGYeQfUzQNGk6rDNnLBQKrenN712K4AQJEG"

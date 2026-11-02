@@ -1,0 +1,84 @@
+import type { PublicKey, TransactionSignature, Signer } from "@solana/web3.js";
+
+export type DexKind = "orca" | "raydium";
+
+export interface PoolConfig {
+  id: string;
+  dex: DexKind;
+  symbol: string;
+  poolAddress: string;
+  positionAddress?: string;
+  tokenA: string;
+  tokenB: string;
+  poolLabel: string;
+  priceFeedUrl: string;           // endpoint returning latest OHLCV or ticker
+  candlesUrl?: string;            // endpoint returning OHLCV array
+  active: boolean;
+  baseWidthBps: number;           // e.g. 150 = 1.50% width default
+  minWidthBps: number;
+  maxWidthBps: number;
+  maxLiquidityChangeBps: number;  // e.g. 250 = +/−2.5%
+  cooldownSeconds: number;
+  maxRebalancesPerDay: number;
+}
+
+export interface AppConfig {
+  rpcUrl: string;
+  wsRpcUrl: string;
+  executionMode: "dry-run" | "live";
+  privateKeyBase58: string;
+  minSignalStrength: number;
+  maxSlippageBps: number;
+  maxRetries: number;
+  pollSeconds: number;
+  dbPath: string;
+  pools: PoolConfig[];
+}
+
+export interface PricePoint {
+  ts: number;
+  price: number;
+}
+
+export interface KineticSignal {
+  t: number;
+  shortEmaRet: number;
+  longEmaRet: number;
+  velocity: number;
+  acceleration: number;
+  realizedVol: number;
+  kineticScore: number; // dimensionless regime score
+  momentum: number;
+  ok: boolean;        // false when window data stale/insufficient
+}
+
+export interface PositionSnapshot {
+  positionAddress: string;
+  liquidity: number;   // on-chain normalized liquidity in protocol units
+  lowerPrice: number;  // preferred as float quote ratio
+  upperPrice: number;
+  inRange: boolean;
+  spotPrice: number;
+  sqrtPriceX64?: number;
+  tickCurrent?: number;
+  version: number;
+  updatedSlot?: number;
+}
+
+export interface RebalancePlan {
+  poolId: string;
+  shouldRebalance: boolean;
+  reason: string;
+  targetLowerPrice: number;
+  targetUpperPrice: number;
+  liquidityBpsDelta: number; // - = reduce, + = increase
+  expectedKineticScore: number;
+  confidence: number;
+}
+
+export interface DexAdapter {
+  dex: DexKind;
+  healthCheck(): Promise<boolean>;
+  fetchPosition(positionAddress: string): Promise<PositionSnapshot>;
+  buildRebalanceTransaction(plan: RebalancePlan, signer: Signer, context: { slot: number }): Promise<{ tx: any; signers?: Signer[] }>;
+}

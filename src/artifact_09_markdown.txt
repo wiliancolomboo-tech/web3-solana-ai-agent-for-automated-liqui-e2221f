@@ -1,0 +1,20 @@
+1. Sandwich / Front-Running Attacks:
+   - Threat: Searcher observes rebalance transaction and front-runs with large swap to displace tick price.
+   - Mitigation: On-chain Pyth oracle check verifies that DEX pool tick corresponds to Pyth EMA spot price 
+     within `MAX_CONFIDENCE_RATIO_BPS` (1.5%). If sandwich is attempted, the transaction aborts with `ExcessiveOracleSpread`.
+
+2. Flash-Loan Induced Price Dislocation:
+   - Threat: Attacker manipulates spot pool reserves using a flash swap immediately before rebalance trigger.
+   - Mitigation: Rebalance bounds are validated against the Pyth pull oracle price feed rather than pool spot ratio alone.
+
+3. Rogue Keeper Exploits:
+   - Threat: Keeper keypair compromised; attempts to drain vault liquidity or set pathological ranges.
+   - Mitigation:
+     * Vault authority PDA retains custody of token accounts.
+     * Rebalance parameters constrain tick width to minimum safety limits (`min_tick_width`).
+     * Admin possesses immediate `set_keeper` authority to revoke rogue keepers.
+
+4. Account Substitution & PDA Spoofing:
+   - Threat: Attacker passes malicious token vaults or fake pool states.
+   - Mitigation: Strict Anchor account constraints:
+     `#[account(mut, address = vault_state.token_a_vault)]` and PDA seed validations.

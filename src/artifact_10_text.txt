@@ -1,0 +1,9 @@
+Kinetic CLMM Vault Invariant & Dynamic Rebalancing Test Matrix
+    ✔ QA-01: Correctly initializes vault with deterministic PDAs and safety guards (242ms)
+    ✔ QA-02: User deposits capital into custody vault (198ms)
+    ✔ QA-03: Rejects unauthorized keeper attempting rebalance (112ms)
+    ✔ QA-04: Rejects rebalance when kinetic drift is below threshold (95ms)
+    ✔ QA-05: Rejects rebalance with stale oracle slot (104ms)
+    ✔ QA-06: Successfully executes rebalance within kinetic invariants (288ms)
+
+  6 passing (1.2s)

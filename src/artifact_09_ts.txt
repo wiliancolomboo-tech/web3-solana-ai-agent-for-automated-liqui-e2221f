@@ -1,0 +1,103 @@
+import type { KineticSignal, PositionSnapshot, RebalancePlan, PoolConfig } from "../types.js";
+
+function clamp(v: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, v));
+}
+
+function pctDelta(x: number, base: number): number {
+  return base === 0 ? 0 : (x - base) / base;
+}
+
+export interface PlanInputs {
+  pool: PoolConfig;
+  signal: KineticSignal;
+  position: PositionSnapshot;
+  minSignalStrength: number;
+}
+
+export class RebalancePolicy {
+  constructor(private readonly minSignalStrength: number) {}
+
+  decide(input: PlanInputs): RebalancePlan {
+    const { pool, signal, position } = input;
+
+    const center = position.spotPrice;
+    const widthBps = inferTargetWidth(signal, pool.baseWidthBps, pool.minWidthBps, pool.maxWidthBps);
+    const trend = signal.momentum;
+
+    // if kinetic is too weak and no urgency -> no-op
+    const shouldMove = signal.ok && signal.kineticScore >= this.minSignalStrength;
+    if (!shouldMove) {
+      return noOp(pool.id, position, signal.kineticScore, "insufficient kinetic confidence");
+    }
+
+    // center drift with trend and avoid edge clustering
+    const driftBps = clamp(signal.momentum * 10000 * 0.25, -widthBps / 6, widthBps / 6);
+    const newCenter = clamp(center * (1 + driftBps / 10000), center * 0.5, center * 2.0);
+
+    const halfWidth = newCenter * (widthBps / 10000) / 2;
+    let targetLower = newCenter - halfWidth;
+    let targetUpper = newCenter + halfWidth;
+
+    // Keep current lower/upper if position is already very close
+    const relShift = Math.max(
+      Math.abs(pctDelta(targetLower, position.lowerPrice)),
+      Math.abs(pctDelta(targetUpper, position.upperPrice))
+    );
+
+    const inRangeGuard = position.inRange ? 1 : 1.15; // widen if out of range
+    targetLower *= inRangeGuard;
+    targetUpper *= inRangeGuard;
+
+    const liquidityBpsDelta = this.liquidityAdjustment(signal, position, pool);
+
+    if (relShift < 0.0005 && Math.abs(liquidityBpsDelta) < 10) {
+      return noOp(pool.id, position, signal.kineticScore, "small delta vs current range");
+    }
+
+    const confidence = clamp(0.5 + signal.kineticScore, 0, 1);
+
+    return {
+      poolId: pool.id,
+      shouldRebalance: true,
+      reason: `kinetic>${input.minSignalStrength.toFixed(2)} with momentum drift`,
+      targetLowerPrice: targetLower,
+      targetUpperPrice: targetUpper,
+      liquidityBpsDelta,
+      expectedKineticScore: signal.kineticScore,
+      confidence
+    };
+  }
+
+  private liquidityAdjustment(signal: KineticSignal, position: PositionSnapshot, pool: PoolConfig): number {
+    const vol = Math.abs(signal.realizedVol);
+    const base = clamp(vol * 10000, -pool.maxLiquidityChangeBps, pool.maxLiquidityChangeBps);
+
+    if (signal.kineticScore < this.minSignalStrength) return 0;
+
+    // reduce exposure during abrupt movement if near bounds
+    const edgeRisk = position.inRange ? 0 : 10;
+    return Math.trunc(clamp(base - edgeRisk, -pool.maxLiquidityChangeBps, pool.maxLiquidityChangeBps));
+  }
+}
+
+function inferTargetWidth(kinetic: KineticSignal, baseBps: number, minBps: number, maxBps: number): number {
+  if (!kinetic.ok) return clamp(baseBps, minBps, maxBps);
+
+  // high kinetic => wider range; low => tighter
+  const raw = baseBps * (1 + 1.8 * kinetic.kineticScore);
+  return clamp(raw, minBps, maxBps);
+}
+
+function noOp(poolId: string, position: PositionSnapshot, score: number, reason: string): RebalancePlan {
+  return {
+    poolId,
+    shouldRebalance: false,
+    reason,
+    targetLowerPrice: position.lowerPrice,
+    targetUpperPrice: position.upperPrice,
+    liquidityBpsDelta: 0,
+    expectedKineticScore: score,
+    confidence: 0
+  };
+}

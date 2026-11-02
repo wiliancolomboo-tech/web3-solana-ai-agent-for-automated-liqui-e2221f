@@ -1,0 +1,6 @@
+SOLANA_RPC_URL="https://api.devnet.solana.com"
+SOLANA_WS_URL="wss://api.devnet.solana.com"
+KEEPER_PRIVATE_KEY="[12,43,122,...]"
+VAULT_PUBKEY="<YOUR_VAULT_PDA_PUBKEY>"
+PYTH_ORACLE_PUBKEY="J83w4HKfqxwcq3BEMMkPFSppX3gqekLyLJBexebFVkix"
+POLL_INTERVAL_MS=3000

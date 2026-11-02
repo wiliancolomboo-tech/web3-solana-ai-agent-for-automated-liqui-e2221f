@@ -1,0 +1,13 @@
+[programs.localnet]
+kinetic_vault = "K1nEtic1111111111111111111111111111111111111"
+
+[validator]
+url = "https://api.mainnet-beta.solana.com"
+
+# Clone Pyth SOL/USD Feed Receiver
+[[validator.clone]]
+address = "rec5EKMGg6vTXnddM4oyGT8ap58Ycek2E2EyNA8fzQP"
+
+# Clone Orca Whirlpools Program
+[[validator.clone]]
+address = "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc"

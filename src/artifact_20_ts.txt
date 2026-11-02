@@ -1,0 +1,13 @@
+import { describe, expect, it } from "vitest";
+import { StateStore } from "../storage";
+
+describe("StateStore", () => {
+  it("stores actions and counts in time window", () => {
+    const store = new StateStore(":memory:");
+    store.writeAction({ poolId: "p", ts: Date.now() - 1000, slot: 1, reason: "x", kineticScore: 1 });
+    const cnt = store.countActionsSince("p", Date.now() - 2_000);
+    expect(cnt).toBe(1);
+    const ts = store.lastActionTs("p");
+    expect(ts).toBeGreaterThan(Date.now() - 10_000);
+  });
+});

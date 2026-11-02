@@ -1,0 +1,18 @@
+[agent]
+pool_address = "whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc"
+position_address = "H7b3QJb1...posPubkey"
+token_a_decimals = 9
+token_b_decimals = 6
+tick_spacing = 64
+rebalance_trigger_buffer = 0.08
+pyth_oracle_feed = "H6ARHf6YXhGYeQfUzQNGk6rDNnLBQKrenN712K4AQJEG"
+max_allowed_oracle_divergence_pct = 1.25
+jito_tip_lamports = 100000
+jito_block_engine_url = "https://mainnet.block-engine.jito.wtf"
+
+[kinetic]
+window_size = 24
+z_score = 2.0
+time_horizon_days = 1.0
+kinetic_alpha = 1.34
+momentum_weight = 0.50

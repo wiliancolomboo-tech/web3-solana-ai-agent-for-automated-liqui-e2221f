@@ -1,3 +1,9 @@
-[Agent Init] Monitoring CLMM: 7qbRF6YsyGuLUVs6Y1q64bdVrfe4ZcUUz1JRdoVNUJnm
-[Kinetic Analysis] Vol: 0.0124 | Vel: -0.00034 | Ek: 0.0021 | Bounds: [-19420, -18200]
-[Status] Position in optimal boundary. Active Tick: -18810. No rebalance required.
+kinetix_vault Integration Suite
+    ✔ Initializes the Kinetix Vault with Operator and PDA token stores (380ms)
+    ✔ Fails when an unauthorized actor attempts a kinetic rebalance (42ms)
+    ✔ Rejects unaligned tick spacing to guarantee CLMM pool safety (38ms)
+    ✔ Executes a valid kinetic rebalance signed by Operator (310ms)
+    ✔ Rejects rebalances exceeding safety kinetic volatility upper limit (40ms)
+    ✔ Admin successfully toggles emergency freeze circuit breaker (195ms)
+
+  6 passing (1.2s)

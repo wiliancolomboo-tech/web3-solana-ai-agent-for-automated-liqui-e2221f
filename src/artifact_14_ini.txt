@@ -1,0 +1,17 @@
+[Unit]
+Description=Solana Kinetic AI Liquidity Rebalancer
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=3
+User=solana
+WorkingDirectory=/opt/solana-kinetic-agent
+ExecStart=/usr/bin/node /opt/solana-kinetic-agent/dist/index.js
+EnvironmentFile=/opt/solana-kinetic-agent/.env
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

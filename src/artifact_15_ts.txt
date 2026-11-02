@@ -1,0 +1,69 @@
+import { Connection, sendAndConfirmRawTransaction, sendAndConfirmTransaction, Transaction, TransactionInstruction, VersionedTransaction, Keypair } from "@solana/web3.js";
+import pino from "pino";
+import type { DexAdapter, RebalancePlan } from "./types.js";
+
+const log = pino({ level: process.env.LOG_LEVEL || "info" });
+
+function computePriorityTip(unitLamports: number): any {
+  return unitLamports > 0 ? { units: unitLamports } : null;
+}
+
+export class Executor {
+  constructor(
+    private readonly conn: Connection,
+    private readonly keypair: Keypair,
+    private readonly mode: "live" | "dry-run",
+    private readonly maxRetries: number,
+    private readonly maxSlippageBps: number
+  ) {}
+
+  async execute(poolId: string, adapter: DexAdapter, plan: RebalancePlan): Promise<string | "simulated"> {
+    if (!plan.shouldRebalance) return "simulated";
+
+    const blockhash = (await this.conn.getLatestBlockhash()).blockhash;
+    if (this.mode === "dry-run") {
+      await adapter.buildRebalanceTransaction(plan, this.keypair);
+      log.info({ poolId, plan }, "simulated_rebalance");
+      return "simulated";
+    }
+
+    const { tx } = await adapter.buildRebalanceTransaction(plan, this.keypair);
+
+    // Generic simulation guard in live mode
+    if (tx instanceof Transaction || tx instanceof VersionedTransaction) {
+      const sig = await this.sendWithRetries(tx);
+      log.info({ poolId, sig }, "rebalance_tx_sent");
+      return sig;
+    }
+
+    throw new Error("Unsupported transaction type from adapter");
+  }
+
+  private async sendWithRetries(txLike: any): Promise<string> {
+    const max = this.maxRetries;
+    let lastErr: any;
+    for (let attempt = 0; attempt < max; attempt++) {
+      try {
+        // Most adapters should produce fully signed tx.
+        if (txLike instanceof Transaction && !(txLike as any).signature) {
+          txLike.partialSign(this.keypair);
+        }
+        const sig = await sendAndConfirmTransaction(this.conn, txLike, [this.keypair], {
+          commitment: "confirmed",
+          skipPreflight: false,
+          preflightCommitment: "confirmed"
+        });
+        return sig;
+      } catch (e: any) {
+        lastErr = e;
+        const delay = Math.pow(2, attempt) * 250 + Math.random() * 150;
+        await sleep(delay);
+      }
+    }
+    throw new Error(`tx retries exhausted: ${lastErr?.message ?? lastErr}`);
+  }
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}

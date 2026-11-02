@@ -1,0 +1,17 @@
+[Unit]
+Description=Solana Kinetic Liquidity Rebalancer Agent
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/solana-kinetic-agent
+ExecStart=/usr/bin/npx tsx /home/ubuntu/solana-kinetic-agent/src/index.ts
+Restart=always
+RestartSec=5
+EnvironmentFile=/home/ubuntu/solana-kinetic-agent/.env
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

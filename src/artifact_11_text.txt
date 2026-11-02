@@ -1,0 +1,9 @@
+sol_kinetix_vault test matrix
+    ✔ QA-01: Successfully Initializes Kinetic Vault with Correct PDA Seeds & Limits (385ms)
+    ✔ QA-02: Deposits Funds into Program Vault Escrow (412ms)
+    ✔ QA-03: Security Invariant: Rejects Unauthorized Keeper Signature (120ms)
+    ✔ QA-04: Security Invariant: Rejects Slippage Beyond Invariant Ceiling (115ms)
+    ✔ QA-05: Executes Valid Kinetic Rebalance and Mutates State Counter (16150ms)
+    ✔ QA-06: Emergency Withdraw Drains 100% Capital Back to Owner Only (298ms)
+
+  6 passing (17.5s)

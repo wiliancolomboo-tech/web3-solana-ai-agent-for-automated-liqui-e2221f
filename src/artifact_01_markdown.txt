@@ -1,0 +1,29 @@
+# Solana AI Agent for Automated Liquidity Rebalancing
+## Production-Grade Technical Deliverable
+
+## 1) Executive Technical Summary & Value Proposition
+
+## Executive Technical Summary
+This deliverable implements a **hybrid on-chain policy layer + off-chain AI keeper** that automates LP rebalancing for Raydium/Orca concentrated liquidity pools on Solana.
+
+### Core idea
+- **Off-chain AI Keeper** continuously computes a **kinetic-volatility indicator** from pool price/volume micro-structure.
+- It decides optimal range shifts and emits a signed rebalance proposal.
+- **On-chain Anchor program** validates governance/security constraints (keeper allowlist, cooldowns, tick bounds, slippage guard, replay guard, pause).
+- If valid, it executes a **CPI-controlled rebalance path** and updates immutable audit state.
+
+### Why this wins:
+- **Risk-aware**: every action must pass on-chain constraints + cooldown + hash binding.
+- **Deterministic + auditable**: all decisions are recorded on-chain with event logs + sequence IDs.
+- **Operator-safe**: centralized failure modes are limited to explicit admin/keeper controls with emergency pause.
+- **Cross-DEX extensible**: same policy layer handles both Orca/Raydium through adapter-style CPI metadata passed by keeper.
+
+### Value to ecosystem
+- Reduces manual LP maintenance burden.
+- Improves capital efficiency under volatility regime changes.
+- Improves consistency and response speed of LP management.
+- Produces verifiable action telemetry useful for risk/compliance.
+
+---
+
+## 2) Visual Architecture Flowchart (Mermaid)

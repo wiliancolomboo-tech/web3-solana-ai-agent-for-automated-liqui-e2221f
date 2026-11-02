@@ -1,0 +1,9 @@
+## 4.4 Run Modes
+1. **Dev/Test**
+   - `DRY_RUN=true`, `EXECUTION_MODE=simulate`, use Mock adapter and local test keys.
+2. **Staging**
+   - `DRY_RUN=false`, `EXECUTION_MODE=simulate`, real adapters + simulation-only checks.
+3. **Production**
+   - `DRY_RUN=false`, `EXECUTION_MODE=live`, builder endpoint or native protocol adapter with real signing.
+
+## 4.5 Optional Container

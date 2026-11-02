@@ -1,0 +1,3 @@
+{"level":30,"time":1710934812000,"currentPrice":"192.412039","tick":-24832,"sampleCount":50,"msg":"Observation ingested"}
+{"level":40,"time":1710934815000,"currentTick":-24832,"posLower":-24960,"posUpper":-24320,"msg":"Rebalance threshold breached. Executing kinetic shift..."}
+{"level":30,"time":1710934816200,"bundleId":"d3f9a7c...","msg":"Bundle successfully submitted to Jito Block Engine"}

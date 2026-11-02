@@ -1,0 +1,22 @@
++---------------+-----------------------------------------------+------------------------------------------------------------+
+| Timestamp     | Visual Layout                                 | Spoken Narration Audio Track                               |
++---------------+-----------------------------------------------+------------------------------------------------------------+
+| 0:00 - 0:20   | Terminal split-screen showing volatile SOL    | "Welcome to KineticVault. Concentrated liquidity on Solana |
+|               | price action vs. LP out-of-range alert.       | unlocks massive fee yield, but volatile swings leave LPs   |
+|               | Red alert indicator on stagnant position.     | holding impermanent loss outside active tick ranges."      |
++---------------+-----------------------------------------------+------------------------------------------------------------+
+| 0:20 - 0:45   | Kinetic Volatility Vector Graph rendering     | "KineticVault solves this with a real-time kinetic physics |
+|               | velocity v(t), acceleration a(t), and         | model that monitors price acceleration and directional     |
+|               | dynamic tick band skewing in real-time.       | drift to calculate the optimal asymmetric range."          |
++---------------+-----------------------------------------------+------------------------------------------------------------+
+| 0:45 - 1:15   | Live execution: Off-chain Keeper AI detects   | "Here our keeper detects a 4% kinetic momentum spike. It   |
+|               | breakout, formats Jito bundle, and triggers   | atomically computes new ticks and fires a rebalance call   |
+|               | on-chain `rebalance_kinetic` Anchor program.  | into our Anchor vault, consuming only 12,400 Compute Units."|
++---------------+-----------------------------------------------+------------------------------------------------------------+
+| 1:15 - 1:40   | Mocha test runner passing 5/5 complex unit &  | "Our on-chain program enforces PDA authority validation,   |
+|               | integration tests; security bounds verified.  | tick modulo alignment, and an invariant safety ceiling     |
+|               |                                               | that prevents flash loan manipulation."                    |
++---------------+-----------------------------------------------+------------------------------------------------------------+
+| 1:40 - 2:00   | Dashboard showing In-Range % (94.8%) and net  | "KineticVault brings institutional-grade, MEV-protected    |
+|               | yield outperformance vs. standard CLMMs.      | autonomous market making directly to Solana. Thank you."   |
++---------------+-----------------------------------------------+------------------------------------------------------------+

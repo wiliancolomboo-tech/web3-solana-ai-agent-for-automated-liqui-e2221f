@@ -1,0 +1,8 @@
++------------------------------------+---------------------------------------+------------------------------------------+
+| Health / Alert Metric              | Critical Threshold                    | Automated Action                         |
++------------------------------------+---------------------------------------+------------------------------------------+
+| Kinetic Spike Metric ($E_k$)       | $E_k > 80.0$                          | Expand position width to max_tick_width  |
+| Consecutive Failed Rebalances     | >= 3 failed slots                     | Dispatch Discord P1 Ping; fallback RPC   |
+| Keeper SOL Gas Balance             | < 0.2 SOL                             | Resend P2 low-gas replenishment alert    |
+| CLMM Tick Out-of-Bounds            | Price outside tick interval > 12 slots| Force atomic Jito re-centering bundle    |
++------------------------------------+---------------------------------------+------------------------------------------+

@@ -1,0 +1,9 @@
+kinetic-vault integration & validation tests
+    ✔ 1. Initializes vault configuration correctly (412ms)
+    ✔ 2. Rejects rebalance invoked by unauthorized keeper (189ms)
+    ✔ 3. Rejects rebalance that violates minimum tick spread (176ms)
+    ✔ 4. Rejects rebalance when kinetic energy exceeds laminar bounds (204ms)
+    ✔ 5. Successfully executes rebalance with valid kinetic proof (315ms)
+    ✔ 6. Rejects rebalance when called within cooldown window (162ms)
+
+  6 passing (1.5s)

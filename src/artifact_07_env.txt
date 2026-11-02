@@ -1,0 +1,8 @@
+SOLANA_RPC_ENDPOINT=https://mainnet.helius-rpc.com/?api-key=YOUR_KEY
+JITO_BLOCK_ENGINE_URL=https://mainnet.block-engine.jito.wtf/api/v1/bundles
+JITO_TIP_ACCOUNT=96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5
+JITO_TIP_LAMPORTS=100000
+AGENT_PRIVATE_KEY=[12,43,122,...]
+VAULT_STATE_ADDRESS=YourVaultStatePDAHere
+CLMM_POOL_ADDRESS=whirLbMiicVdio4qvUfM5KAg6Ct8VwpYzGff3uctyCc
+TICK_SPACING=64

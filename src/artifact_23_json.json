@@ -1,0 +1,21 @@
+[
+  {
+    "id": "SOL-USDC-ORCA",
+    "dex": "orca",
+    "symbol": "SOL/USDC",
+    "poolAddress": "<orca_whirlpool_pool_pubkey>",
+    "positionAddress": "<orca_position_pubkey>",
+    "tokenA": "So111...",
+    "tokenB": "EPjFW...",
+    "poolLabel": "orca_sol_usdc",
+    "priceFeedUrl": "https://api.example.org/price?pair=SOL_USDC",
+    "candlesUrl": "https://api.example.org/ohlcv?pair=SOL_USDC",
+    "active": true,
+    "baseWidthBps": 150,
+    "minWidthBps": 80,
+    "maxWidthBps": 3000,
+    "maxLiquidityChangeBps": 250,
+    "cooldownSeconds": 900,
+    "maxRebalancesPerDay": 24
+  }
+]
