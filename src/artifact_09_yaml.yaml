@@ -1,25 +1,21 @@
-version: '3.8'
+version: "3.8"
 
 services:
-  solana-kinetic-agent:
+  kinetix-agent:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: solana-kinetic-agent
+    container_name: kinetix-agent
     restart: unless-stopped
     environment:
-      - SOLANA_RPC_URL=https://mainnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}
-      - OPERATOR_PRIVATE_KEY=${OPERATOR_PRIVATE_KEY}
+      - SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
       - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
       - RESEND_API_KEY=${RESEND_API_KEY}
-      - ALERT_EMAIL=ops@fund.fi
-    healthcheck:
-      test: ["CMD-SHELL", "node -e 'process.exit(0)'"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
+      - REPORTING_EMAIL=${REPORTING_EMAIL}
+      - EVALUATION_INTERVAL_MS=3000
     logging:
       driver: "json-file"
       options:
-        max-size: "50m"
+        max-size: "100m"
         max-file: "5"

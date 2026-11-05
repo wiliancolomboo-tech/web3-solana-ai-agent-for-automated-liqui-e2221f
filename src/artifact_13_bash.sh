@@ -1,2 +1,2 @@
-# In terminal 1:
-solana-test-validator --reset
+# Emergency pause instruction via CLI
+   anchor run pause-vault -- --strategy-id 101 --paused true

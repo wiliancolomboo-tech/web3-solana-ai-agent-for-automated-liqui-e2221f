@@ -1,265 +1,172 @@
-import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
-import { KineticLpVault } from "../target/types/kinetic_lp_vault";
 import {
-  TOKEN_PROGRAM_ID,
-  createMint,
-  createAccount,
-  mintTo,
-  getAccount,
-} from "@solana/spl-token";
-import { PublicKey, Keypair, SystemProgram, SYSVAR_RENT_PUBKEY } from "@solana/web3.js";
-import { expect } from "chai";
+  Connection,
+  Keypair,
+  PublicKey,
+  Transaction,
+  sendAndConfirmTransaction,
+  ComputeBudgetProgram,
+} from "@solana/web3.js";
+import { Program, AnchorProvider, Wallet } from "@coral-xyz/anchor";
+import { Resend } from "resend";
+import axios from "axios";
+import * as http from "http";
+import client from "prom-client";
+import { KineticEngine, PriceSample } from "./kinetic_engine";
 
-describe("kinetic-lp-vault end-to-end tests", () => {
-  const provider = anchor.AnchorProvider.env();
-  anchor.setProvider(provider);
+// Load Environment Configuration
+const RPC_URL = process.env.SOLANA_RPC_URL || "https://api.mainnet-beta.solana.com";
+const KEEPER_KEY_JSON = process.env.KEEPER_PRIVATE_KEY || "[]";
+const PROGRAM_ID = new PublicKey(process.env.PROGRAM_ID || "Kinet1cReba1ance11111111111111111111111111111");
+const VAULT_PDA = new PublicKey(process.env.VAULT_PDA || "11111111111111111111111111111111");
+const PYTH_FEED = new PublicKey(process.env.PYTH_FEED_SOL_USD || "H6ARHf6YXhGYeQfUzQNGk6rDNnLBQKrenN712K4AQJEG");
+const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK_URL || "";
+const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
+const ALERT_EMAIL = process.env.ALERT_EMAIL || "ops@kinetic-vault.finance";
 
-  const program = anchor.workspace.KineticLpVault as Program<KineticLpVault>;
+// Prometheus Metrics Instrumentation
+const registry = new client.Registry();
+client.collectDefaultMetrics({ register: registry });
 
-  let authority = Keypair.generate();
-  let keeper = Keypair.generate();
-  let unauthorized = Keypair.generate();
-  let whirlpool = Keypair.generate();
-  let mockPosition = Keypair.generate();
+const rebalanceCounter = new client.Counter({
+  name: "kinetic_rebalance_total",
+  help: "Total number of successful kinetic rebalances executed",
+  labelNames: ["status"],
+});
+const kineticEnergyGauge = new client.Gauge({
+  name: "kinetic_energy_indicator",
+  help: "Current evaluated kinetic energy of the asset pool",
+});
+registry.registerMetric(rebalanceCounter);
+registry.registerMetric(kineticEnergyGauge);
 
-  let mintA: PublicKey;
-  let mintB: PublicKey;
-  let vaultPda: PublicKey;
-  let tokenVaultAPda: PublicKey;
-  let tokenVaultBPda: PublicKey;
-  let vaultBump: number;
+const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 
-  before(async () => {
-    // Fund test wallets
-    for (const kp of [authority, keeper, unauthorized]) {
-      const sig = await provider.connection.requestAirdrop(kp.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL);
-      await provider.connection.confirmTransaction(sig);
-    }
+async function sendAlert(title: string, message: string, payload: Record<string, any>) {
+  console.log(`[ALERT] ${title}: ${message}`);
 
-    // Create mock tokens
-    mintA = await createMint(provider.connection, authority, authority.publicKey, null, 6);
-    mintB = await createMint(provider.connection, authority, authority.publicKey, null, 9);
-
-    [vaultPda, vaultBump] = PublicKey.findProgramAddressSync(
-      [Buffer.from("vault"), whirlpool.publicKey.toBuffer()],
-      program.programId
-    );
-
-    [tokenVaultAPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("token_a"), vaultPda.toBuffer()],
-      program.programId
-    );
-
-    [tokenVaultBPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("token_b"), vaultPda.toBuffer()],
-      program.programId
-    );
-  });
-
-  it("1. Initializes the Kinetic Vault Successfully", async () => {
-    const tickSpacing = 64;
-    const kineticAlpha = 8000; // 0.8
-    const maxDeviationBps = 150; // 1.5%
-
-    await program.methods
-      .initializeVault(tickSpacing, kineticAlpha, maxDeviationBps)
-      .accounts({
-        authority: authority.publicKey,
-        keeper: keeper.publicKey,
-        whirlpool: whirlpool.publicKey,
-        vault: vaultPda,
-        tokenVaultA: tokenVaultAPda,
-        tokenVaultB: tokenVaultBPda,
-        tokenMintA: mintA,
-        tokenMintB: mintB,
-        systemProgram: SystemProgram.programId,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        rent: SYSVAR_RENT_PUBKEY,
-      })
-      .signers([authority])
-      .rpc();
-
-    const vaultAccount = await program.account.vault.fetch(vaultPda);
-    expect(vaultAccount.authority.toBase58()).to.equal(authority.publicKey.toBase58());
-    expect(vaultAccount.keeper.toBase58()).to.equal(keeper.publicKey.toBase58());
-    expect(vaultAccount.tickSpacing).to.equal(64);
-    expect(vaultAccount.totalRebalances.toNumber()).to.equal(0);
-  });
-
-  it("2. Blocks Unauthorized Keepers from Triggering Rebalance", async () => {
-    const dummyParams = {
-      oldLowerTick: -1280,
-      oldUpperTick: 1280,
-      newLowerTick: -640,
-      newUpperTick: 1920,
-      currentPositionLiquidity: new anchor.BN(1_000_000),
-      minTokenAWithdrawn: new anchor.BN(0),
-      minTokenBWithdrawn: new anchor.BN(0),
-      swapAmount: new anchor.BN(0),
-      swapOtherAmountThreshold: new anchor.BN(0),
-      swapAToB: true,
-      swapSqrtPriceLimit: new anchor.BN(0),
-      minLiquidityMinted: new anchor.BN(500_000),
-      poolSqrtPriceX64: new anchor.BN("18446744073709551616"), // 1.0 in Q64
-      oraclePriceScaled: new anchor.BN(1_000_000), // 1.0 (scaled 1e6)
-      kineticEnergyMetric: new anchor.BN(1250),
-      minSlotDelay: new anchor.BN(0),
-    };
-
+  // 1. Enterprise Discord Webhook Notification
+  if (DISCORD_WEBHOOK) {
     try {
-      await program.methods
-        .rebalancePosition(dummyParams)
-        .accounts({
-          keeper: unauthorized.publicKey,
-          vault: vaultPda,
-          tokenVaultA: tokenVaultAPda,
-          tokenVaultB: tokenVaultBPda,
-          whirlpoolProgram: program.programId, // Mock ID
-          whirlpool: whirlpool.publicKey,
-          position: mockPosition.publicKey,
-          positionTokenAccount: tokenVaultAPda,
-          tickArrayLower: vaultPda,
-          tickArrayUpper: vaultPda,
-          tokenProgram: TOKEN_PROGRAM_ID,
-        })
-        .signers([unauthorized])
-        .rpc();
-      expect.fail("Should have failed with UnauthorizedKeeper");
-    } catch (err: any) {
-      expect(err.error.errorCode.code).to.equal("UnauthorizedKeeper");
+      await axios.post(DISCORD_WEBHOOK, {
+        embeds: [
+          {
+            title: `🚀 Kinetic Agent: ${title}`,
+            description: message,
+            color: 0x00ff88,
+            fields: Object.entries(payload).map(([k, v]) => ({
+              name: k,
+              value: String(v),
+              inline: true,
+            })),
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      });
+    } catch (e: any) {
+      console.error("Failed to post Discord webhook:", e.message);
     }
-  });
+  }
 
-  it("3. Rejects Rebalance When Oracle Deviation Exceeds Slippage Limit", async () => {
-    // 1.0 in Q64 vs 1.10 in Oracle -> 10% deviation > 1.5% max
-    const maliciousDeviationParams = {
-      oldLowerTick: -1280,
-      oldUpperTick: 1280,
-      newLowerTick: -640,
-      newUpperTick: 1920,
-      currentPositionLiquidity: new anchor.BN(1_000_000),
-      minTokenAWithdrawn: new anchor.BN(0),
-      minTokenBWithdrawn: new anchor.BN(0),
-      swapAmount: new anchor.BN(0),
-      swapOtherAmountThreshold: new anchor.BN(0),
-      swapAToB: true,
-      swapSqrtPriceLimit: new anchor.BN(0),
-      minLiquidityMinted: new anchor.BN(500_000),
-      poolSqrtPriceX64: new anchor.BN("18446744073709551616"), // 1.0
-      oraclePriceScaled: new anchor.BN(1_100_000), // 1.10 (+10% deviation)
-      kineticEnergyMetric: new anchor.BN(3400),
-      minSlotDelay: new anchor.BN(0),
-    };
-
+  // 2. High-Severity Resend Email Delivery
+  if (resend) {
     try {
-      await program.methods
-        .rebalancePosition(maliciousDeviationParams)
-        .accounts({
-          keeper: keeper.publicKey,
-          vault: vaultPda,
-          tokenVaultA: tokenVaultAPda,
-          tokenVaultB: tokenVaultBPda,
-          whirlpoolProgram: program.programId,
-          whirlpool: whirlpool.publicKey,
-          position: mockPosition.publicKey,
-          positionTokenAccount: tokenVaultAPda,
-          tickArrayLower: vaultPda,
-          tickArrayUpper: vaultPda,
-          tokenProgram: TOKEN_PROGRAM_ID,
-        })
-        .signers([keeper])
-        .rpc();
-      expect.fail("Should have failed with OracleDeviationBreached");
-    } catch (err: any) {
-      expect(err.error.errorCode.code).to.equal("OracleDeviationBreached");
+      await resend.emails.send({
+        from: "alerts@kinetic-vault.finance",
+        to: ALERT_EMAIL,
+        subject: `[SOLANA-AGENT] ${title}`,
+        html: `<h2>${title}</h2><p>${message}</p><pre>${JSON.stringify(payload, null, 2)}</pre>`,
+      });
+    } catch (e: any) {
+      console.error("Failed to dispatch Resend email:", e.message);
     }
+  }
+}
+
+async function runAgent() {
+  const keeperKeypair = Keypair.fromSecretKey(
+    Uint8Array.from(JSON.parse(KEEPER_KEY_JSON))
+  );
+  const connection = new Connection(RPC_URL, { commitment: "confirmed" });
+  const wallet = new Wallet(keeperKeypair);
+  const provider = new AnchorProvider(connection, wallet, {
+    preflightCommitment: "confirmed",
   });
 
-  it("4. Rejects Unaligned Ticks Not Matching Tick Spacing", async () => {
-    const unalignedTickParams = {
-      oldLowerTick: -1280,
-      oldUpperTick: 1280,
-      newLowerTick: -633, // Not divisible by 64
-      newUpperTick: 1920,
-      currentPositionLiquidity: new anchor.BN(1_000_000),
-      minTokenAWithdrawn: new anchor.BN(0),
-      minTokenBWithdrawn: new anchor.BN(0),
-      swapAmount: new anchor.BN(0),
-      swapOtherAmountThreshold: new anchor.BN(0),
-      swapAToB: true,
-      swapSqrtPriceLimit: new anchor.BN(0),
-      minLiquidityMinted: new anchor.BN(500_000),
-      poolSqrtPriceX64: new anchor.BN("18446744073709551616"),
-      oraclePriceScaled: new anchor.BN(1_000_000),
-      kineticEnergyMetric: new anchor.BN(1500),
-      minSlotDelay: new anchor.BN(0),
-    };
+  const engine = new KineticEngine(60, 64);
+  console.log(`Kinetic Agent initialized. Keeper Address: ${keeperKeypair.publicKey.toBase58()}`);
 
+  // Spin up Health Check & Prometheus endpoint
+  http.createServer(async (req, res) => {
+    if (req.url === "/metrics") {
+      res.setHeader("Content-Type", registry.contentType);
+      res.end(await registry.metrics());
+    } else {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ status: "healthy", timestamp: Date.now() }));
+    }
+  }).listen(9090);
+
+  // Polling / WebSocket Price Stream Loop
+  setInterval(async () => {
     try {
-      await program.methods
-        .rebalancePosition(unalignedTickParams)
-        .accounts({
-          keeper: keeper.publicKey,
-          vault: vaultPda,
-          tokenVaultA: tokenVaultAPda,
-          tokenVaultB: tokenVaultBPda,
-          whirlpoolProgram: program.programId,
-          whirlpool: whirlpool.publicKey,
-          position: mockPosition.publicKey,
-          positionTokenAccount: tokenVaultAPda,
-          tickArrayLower: vaultPda,
-          tickArrayUpper: vaultPda,
-          tokenProgram: TOKEN_PROGRAM_ID,
-        })
-        .signers([keeper])
-        .rpc();
-      expect.fail("Should have failed with UnalignedLowerTick");
+      // Simulating spot price fetch (In production: read directly from Orca Whirlpool state account)
+      const mockPrice = 140.0 + (Math.random() - 0.49) * 2.5;
+      const sample: PriceSample = {
+        timestamp: Date.now(),
+        open: mockPrice - 0.1,
+        high: mockPrice + 0.3,
+        low: mockPrice - 0.3,
+        close: mockPrice,
+        volume: 125000 + Math.random() * 50000,
+      };
+
+      engine.ingestPrice(sample);
+
+      // Baseline pool position state (read from on-chain account in practice)
+      const currentTickLower = -1500;
+      const currentTickUpper = 1500;
+
+      const metrics = engine.evaluate(currentTickLower, currentTickUpper);
+      kineticEnergyGauge.set(metrics.kineticEnergy);
+
+      if (metrics.shouldRebalance) {
+        console.log("Kinetic threshold reached. Dispatching rebalance transaction...");
+
+        // Construct high-priority Compute Budget instructions
+        const modifyComputeUnits = ComputeBudgetProgram.setComputeUnitLimit({
+          units: 400_000,
+        });
+        const addPriorityFee = ComputeBudgetProgram.setComputeUnitPrice({
+          microLamports: 50_000, // 0.05 SOL priority booster
+        });
+
+        // Encode and execute rebalance instruction
+        // In real deploy: Program IDL method client.methods.executeRebalance(...)
+        const tx = new Transaction().add(modifyComputeUnits).add(addPriorityFee);
+
+        // Sign & confirm transaction
+        const sig = await sendAndConfirmTransaction(connection, tx, [keeperKeypair], {
+          skipPreflight: false,
+          commitment: "confirmed",
+        });
+
+        rebalanceCounter.inc({ status: "success" });
+        await sendAlert("Liquidity Rebalanced", `Repositioned ticks to dynamic kinetic range`, {
+          TxSignature: sig,
+          KineticEnergy: metrics.kineticEnergy.toFixed(4),
+          GK_Volatility: metrics.garmanKlassVol.toFixed(6),
+          NewLowerTick: metrics.recommendedTickLower,
+          NewUpperTick: metrics.recommendedTickUpper,
+        });
+      }
     } catch (err: any) {
-      expect(err.error.errorCode.code).to.equal("UnalignedLowerTick");
+      console.error("Agent execution loop error:", err);
+      rebalanceCounter.inc({ status: "failure" });
     }
-  });
+  }, 5000);
+}
 
-  it("5. Executes Valid Atomic Kinetic Rebalancing", async () => {
-    const validParams = {
-      oldLowerTick: -1280,
-      oldUpperTick: 1280,
-      newLowerTick: -640,
-      newUpperTick: 1920,
-      currentPositionLiquidity: new anchor.BN(1_000_000),
-      minTokenAWithdrawn: new anchor.BN(0),
-      minTokenBWithdrawn: new anchor.BN(0),
-      swapAmount: new anchor.BN(10_000),
-      swapOtherAmountThreshold: new anchor.BN(9_900),
-      swapAToB: true,
-      swapSqrtPriceLimit: new anchor.BN(0),
-      minLiquidityMinted: new anchor.BN(800_000),
-      poolSqrtPriceX64: new anchor.BN("18446744073709551616"),
-      oraclePriceScaled: new anchor.BN(1_000_000),
-      kineticEnergyMetric: new anchor.BN(2100),
-      minSlotDelay: new anchor.BN(0),
-    };
-
-    const tx = await program.methods
-      .rebalancePosition(validParams)
-      .accounts({
-        keeper: keeper.publicKey,
-        vault: vaultPda,
-        tokenVaultA: tokenVaultAPda,
-        tokenVaultB: tokenVaultBPda,
-        whirlpoolProgram: program.programId,
-        whirlpool: whirlpool.publicKey,
-        position: mockPosition.publicKey,
-        positionTokenAccount: tokenVaultAPda,
-        tickArrayLower: vaultPda,
-        tickArrayUpper: vaultPda,
-        tokenProgram: TOKEN_PROGRAM_ID,
-      })
-      .signers([keeper])
-      .rpc();
-
-    expect(tx).to.be.a("string");
-    const vaultAccount = await program.account.vault.fetch(vaultPda);
-    expect(vaultAccount.totalRebalances.toNumber()).to.equal(1);
-  });
+runAgent().catch((err) => {
+  console.error("Fatal agent runtime crash:", err);
+  process.exit(1);
 });

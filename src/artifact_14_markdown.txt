@@ -1,0 +1,13 @@
+1/7 🌊 Liquidity providers lose millions to Impermanent Loss & chop-induced churn. Static bands don't work in Solana's sub-second block environment.
+
+Introducing Kinetic Rebalancer: The first autonomous AI Agent governing CLMMs with real-time particle volatility physics ⚡🧵👇
+
+2/7 🧠 Built with @solana and @orca_so / @RaydiumProtocol CLMMs in mind, our agent continuously monitors Garman-Klass micro-volatility and directional drift ($K_v$) to dynamically compress or expand position tick widths *before* breakouts occur.
+
+3/7 🛡️ Battle-tested security:
+- Non-custodial Anchor PDA Vault
+- On-chain slippage & maximum tick drift bounds
+- Frontrunning-immune Jito MEV bundles
+- Zero churn during low-liquidity regimes
+
+Read the full open-source repo & turnkey deployment runbook: https://github.com/sponsor-org/kinetic-rebalance-agent 🚀

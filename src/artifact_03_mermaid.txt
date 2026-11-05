@@ -1,28 +1,40 @@
 flowchart TD
-    subgraph MarketData ["Solana On-Chain Microstructure Data"]
-        RPC[Helius / Triton Geyser gRPC] --> Stream[Real-Time Tick & Trade Stream]
-        Pyth[Pyth Network Pull Oracles] --> Stream
+    subgraph Solana Runtime [Solana Blockchain - Mainnet-Beta]
+        CLMM[Orca / Raydium CLMM Pool]
+        Oracle[Pyth Network / Switchboard Price Feed]
+        VaultPDA[Kinetic Vault PDA - programs/kinetic_vault]
+        LPPosition[Concentrated LP Position NFT / Tick Array]
     end
 
-    subgraph AgentCore ["Autonomous Kinetic Agent (Off-Chain Engine)"]
-        Stream --> KineticEngine[Kinetic Volatility Engine]
-        KineticEngine --> |Calculate GK Vol & Tick Velocity| MetricEvaluator{Rebalance Required?}
-        MetricEvaluator -- No --> Idle[Sleep 250ms & Buffer Window]
-        MetricEvaluator -- Yes --> Solver[Optimal Single-Sided Swap & Tick Range Solver]
-        Solver --> JitoBuilder[Jito Bundle & Slippage Guard Constructor]
+    subgraph Off-Chain Agent Engine [Kinetic Volatility Rebalancer Daemon]
+        Geyser[Solana Geyser / Yellowstone gRPC Streamer]
+        Buffer[Micro-Slot Tick & Price Sliding Buffer]
+        MathEngine[Kinetic Volatility & Drift Calculator]
+        DecisionCore{Rebalance Delta > Threshold?}
+        TxBuilder[Anchor CPI & Jito Bundle Constructor]
     end
 
-    subgraph SolanaChain ["On-Chain Anchor Execution Layer"]
-        JitoBuilder --> |Atomic Bundle| Program[K-Rebalancer Vault Program]
-        Program --> |1. Collect Fees & Burn NFT| Pool[Orca Whirlpool / Raydium CLMM]
-        Program --> |2. Optimal Rebalance Swap| DEX[DEX Swap Instruction]
-        Program --> |3. Mint New Position Range| Pool
-        Program --> |Verify Invariants| VaultState[(Vault State Account)]
+    subgraph External Infrastructure & Enterprise Telemetry
+        JitoRelay[Jito Block Engine - MEV Protected]
+        DiscordWebhook[Discord / Slack Enterprise Operations Webhook]
+        ResendAPI[Resend Critical Alert Gateway / PagerDuty]
+        Prometheus[Prometheus Metrics / Grafana Dashboard]
     end
 
-    subgraph Telemetry ["Enterprise Alerting & Telemetry Matrix"]
-        Program --> |Emit Event: RebalanceExecuted| WebhookReceiver[Fastify Telemetry Bridge]
-        WebhookReceiver --> ResendAPI[Resend Critical Mail API]
-        WebhookReceiver --> DiscordBot[Discord & Slack Operations Hook]
-        WebhookReceiver --> Prom[Prometheus / Grafana Dashboard]
-    end
+    %% Data flow
+    CLMM -->|Continuous State Updates| Geyser
+    Oracle -->|Price Benchmarks| Geyser
+    Geyser --> Buffer
+    Buffer --> MathEngine
+    MathEngine --> DecisionCore
+
+    DecisionCore -- No --> Prometheus
+    DecisionCore -- Yes --> TxBuilder
+
+    TxBuilder -->|Atomic Bundle| JitoRelay
+    JitoRelay -->|Leader Auction Delivery| VaultPDA
+    VaultPDA -->|Atomic Rebalance CPI| CLMM
+    VaultPDA -->|Modify Ticks & Collect Fees| LPPosition
+
+    TxBuilder -->|Dispatch Execution Telemetry| DiscordWebhook
+    TxBuilder -->|Emergency Trigger Alert| ResendAPI

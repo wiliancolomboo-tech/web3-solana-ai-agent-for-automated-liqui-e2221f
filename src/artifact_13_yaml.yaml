@@ -1,0 +1,7 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: 'kinetic-solana-agent'
+    static_configs:
+      - targets: ['kinetic-agent:9090']

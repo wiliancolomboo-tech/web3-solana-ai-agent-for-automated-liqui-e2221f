@@ -1,0 +1,23 @@
+# File: docker-compose.yml
+version: "3.8"
+
+services:
+  kinetic-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: solana-kinetic-agent
+    restart: always
+    environment:
+      - SOLANA_RPC_URL=${SOLANA_RPC_URL:-https://api.mainnet-beta.solana.com}
+      - RESEND_API_KEY=${RESEND_API_KEY}
+      - AUDIT_EMAIL_TO=${AUDIT_EMAIL_TO}
+      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL}
+      - PORT=8080
+    ports:
+      - "8080:8080"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"

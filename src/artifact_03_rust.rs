@@ -1,366 +1,517 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
-declare_id!("KineSS1111111111111111111111111111111111111");
-
-pub const MAX_SLIPPAGE_BPS: u16 = 300; // 3.00% max slippage
-pub const MIN_COOLDOWN_SECONDS: i64 = 60; // Anti-churn throttler
+declare_id!("K1nEticVaULT1111111111111111111111111111111");
 
 #[program]
-pub mod kinesis_vault {
+pub mod kinetic_vault {
     use super::*;
 
     pub fn initialize_vault(
         ctx: Context<InitializeVault>,
-        max_tick_deviation: i32,
-        cooldown_period: i64,
         max_slippage_bps: u16,
+        cooldown_seconds: i64,
     ) -> Result<()> {
-        require!(
-            max_slippage_bps <= MAX_SLIPPAGE_BPS,
-            KinesisError::ExcessiveSlippageSetting
-        );
-        require!(
-            cooldown_period >= MIN_COOLDOWN_SECONDS,
-            KinesisError::CooldownTooShort
-        );
+        require!(max_slippage_bps <= 1000, VaultError::ExcessiveSlippageSetting); // Max 10%
+        require!(cooldown_seconds >= 10, VaultError::CooldownTooShort);
 
-        let vault = &mut ctx.accounts.vault;
-        vault.owner = ctx.accounts.owner.key();
-        vault.agent = ctx.accounts.agent.key();
-        vault.token_a_mint = ctx.accounts.token_a_mint.key();
-        vault.token_b_mint = ctx.accounts.token_b_mint.key();
-        vault.token_a_vault = ctx.accounts.token_a_vault.key();
-        vault.token_b_vault = ctx.accounts.token_b_vault.key();
-        vault.max_tick_deviation = max_tick_deviation;
-        vault.cooldown_period = cooldown_period;
-        vault.max_slippage_bps = max_slippage_bps;
-        vault.last_rebalance_ts = 0;
-        vault.bump = ctx.bumps.vault;
-        vault.is_paused = false;
+        let vault_state = &mut ctx.accounts.vault_state;
+        vault_state.authority = ctx.accounts.authority.key();
+        vault_state.agent_executor = ctx.accounts.agent_executor.key();
+        vault_state.token_a_mint = ctx.accounts.token_a_mint.key();
+        vault_state.token_b_mint = ctx.accounts.token_b_mint.key();
+        vault_state.token_a_vault = ctx.accounts.token_a_vault.key();
+        vault_state.token_b_vault = ctx.accounts.token_b_vault.key();
+        vault_state.max_slippage_bps = max_slippage_bps;
+        vault_state.cooldown_seconds = cooldown_seconds;
+        vault_state.last_rebalance_ts = 0;
+        vault_state.active_tick_lower = 0;
+        vault_state.active_tick_upper = 0;
+        vault_state.rebalance_count = 0;
+        vault_state.bump = ctx.bumps.vault_state;
+        vault_state.vault_a_bump = ctx.bumps.token_a_vault;
+        vault_state.vault_b_bump = ctx.bumps.token_b_vault;
 
         emit!(VaultInitializedEvent {
-            owner: vault.owner,
-            agent: vault.agent,
+            authority: vault_state.authority,
+            agent_executor: vault_state.agent_executor,
+            token_a_mint: vault_state.token_a_mint,
+            token_b_mint: vault_state.token_b_mint,
             max_slippage_bps,
+            timestamp: Clock::get()?.unix_timestamp,
         });
 
         Ok(())
     }
 
-    pub fn deposit(ctx: Context<DepositTokens>, amount_a: u64, amount_b: u64) -> Result<()> {
-        require!(!ctx.accounts.vault.is_paused, KinesisError::VaultPaused);
+    pub fn update_agent_executor(
+        ctx: Context<UpdateVaultSettings>,
+        new_executor: Pubkey,
+    ) -> Result<()> {
+        let vault_state = &mut ctx.accounts.vault_state;
+        vault_state.agent_executor = new_executor;
+        emit!(AgentUpdatedEvent {
+            new_executor,
+            timestamp: Clock::get()?.unix_timestamp,
+        });
+        Ok(())
+    }
+
+    pub fn deposit_liquidity(
+        ctx: Context<DepositLiquidity>,
+        amount_a: u64,
+        amount_b: u64,
+    ) -> Result<()> {
+        require!(amount_a > 0 || amount_b > 0, VaultError::ZeroDepositAmount);
 
         if amount_a > 0 {
-            let cpi_accounts = Transfer {
-                from: ctx.accounts.owner_token_a.to_account_info(),
-                to: ctx.accounts.vault_token_a.to_account_info(),
-                authority: ctx.accounts.owner.to_account_info(),
-            };
-            let cpi_program = ctx.accounts.token_program.to_account_info();
-            token::transfer(CpiContext::new(cpi_program, cpi_accounts), amount_a)?;
+            token::transfer(
+                CpiContext::new(
+                    ctx.accounts.token_program.to_account_info(),
+                    Transfer {
+                        from: ctx.accounts.user_token_a.to_account_info(),
+                        to: ctx.accounts.token_a_vault.to_account_info(),
+                        authority: ctx.accounts.depositor.to_account_info(),
+                    },
+                ),
+                amount_a,
+            )?;
         }
 
         if amount_b > 0 {
-            let cpi_accounts = Transfer {
-                from: ctx.accounts.owner_token_b.to_account_info(),
-                to: ctx.accounts.vault_token_b.to_account_info(),
-                authority: ctx.accounts.owner.to_account_info(),
-            };
-            let cpi_program = ctx.accounts.token_program.to_account_info();
-            token::transfer(CpiContext::new(cpi_program, cpi_accounts), amount_b)?;
+            token::transfer(
+                CpiContext::new(
+                    ctx.accounts.token_program.to_account_info(),
+                    Transfer {
+                        from: ctx.accounts.user_token_b.to_account_info(),
+                        to: ctx.accounts.token_b_vault.to_account_info(),
+                        authority: ctx.accounts.depositor.to_account_info(),
+                    },
+                ),
+                amount_b,
+            )?;
         }
 
+        let user_balance = &mut ctx.accounts.user_balance;
+        user_balance.owner = ctx.accounts.depositor.key();
+        user_balance.vault = ctx.accounts.vault_state.key();
+        user_balance.deposited_a = user_balance.deposited_a.checked_add(amount_a).ok_or(VaultError::MathOverflow)?;
+        user_balance.deposited_b = user_balance.deposited_b.checked_add(amount_b).ok_or(VaultError::MathOverflow)?;
+
         emit!(LiquidityDepositedEvent {
-            vault: ctx.accounts.vault.key(),
+            depositor: ctx.accounts.depositor.key(),
             amount_a,
             amount_b,
+            timestamp: Clock::get()?.unix_timestamp,
         });
 
         Ok(())
     }
 
-    pub fn execute_rebalance(
-        ctx: Context<ExecuteRebalance>,
-        new_lower_tick: i32,
-        new_upper_tick: i32,
-        oracle_twap_tick: i32,
-        min_token_a_out: u64,
-        min_token_b_out: u64,
+    pub fn rebalance_position(
+        ctx: Context<RebalancePosition>,
+        params: RebalanceParams,
     ) -> Result<()> {
-        let vault = &mut ctx.accounts.vault;
         let clock = Clock::get()?;
+        let vault_state = &mut ctx.accounts.vault_state;
 
-        require!(!vault.is_paused, KinesisError::VaultPaused);
-        require!(new_lower_tick < new_upper_tick, KinesisError::InvalidTicks);
-
-        // Anti-churn throttler: verify cooldown
-        let elapsed = clock.unix_timestamp.saturating_sub(vault.last_rebalance_ts);
-        require!(elapsed >= vault.cooldown_period, KinesisError::CooldownActive);
-
-        // Oracle Guard: Ensure the midpoint between new ticks doesn't diverge dangerously from Oracle TWAP
-        let tick_midpoint = (new_lower_tick + new_upper_tick) / 2;
-        let deviation = (tick_midpoint - oracle_twap_tick).abs();
-        require!(
-            deviation <= vault.max_tick_deviation,
-            KinesisError::OracleDeviationBreached
+        // Security Validation
+        require_keys_eq!(
+            ctx.accounts.agent_executor.key(),
+            vault_state.agent_executor,
+            VaultError::UnauthorizedAgent
         );
+        require!(
+            clock.unix_timestamp >= vault_state.last_rebalance_ts.saturating_add(vault_state.cooldown_seconds),
+            VaultError::CooldownActive
+        );
+        require!(params.tick_lower < params.tick_upper, VaultError::InvalidTickBounds);
+        require!(params.kinetic_energy_score > 0, VaultError::InvalidKineticMetric);
 
-        // Update timestamps
-        vault.last_rebalance_ts = clock.unix_timestamp;
+        // Verification of Slippage bounds
+        let delta_a = params.expected_amount_a;
+        let delta_b = params.expected_amount_b;
+        let min_a = delta_a
+            .checked_mul(10000 - vault_state.max_slippage_bps as u64)
+            .ok_or(VaultError::MathOverflow)?
+            / 10000;
+        let min_b = delta_b
+            .checked_mul(10000 - vault_state.max_slippage_bps as u64)
+            .ok_or(VaultError::MathOverflow)?
+            / 10000;
+
+        require!(params.actual_amount_a >= min_a, VaultError::SlippageExceededTokenA);
+        require!(params.actual_amount_b >= min_b, VaultError::SlippageExceededTokenB);
+
+        // Update state
+        vault_state.active_tick_lower = params.tick_lower;
+        vault_state.active_tick_upper = params.tick_upper;
+        vault_state.last_rebalance_ts = clock.unix_timestamp;
+        vault_state.rebalance_count = vault_state.rebalance_count.checked_add(1).ok_or(VaultError::MathOverflow)?;
 
         emit!(RebalanceExecutedEvent {
-            vault: vault.key(),
-            executor: ctx.accounts.agent.key(),
-            new_lower_tick,
-            new_upper_tick,
-            oracle_twap_tick,
+            executor: ctx.accounts.agent_executor.key(),
+            old_tick_lower: vault_state.active_tick_lower,
+            old_tick_upper: vault_state.active_tick_upper,
+            new_tick_lower: params.tick_lower,
+            new_tick_upper: params.tick_upper,
+            kinetic_energy_score: params.kinetic_energy_score,
+            amount_a_deployed: params.actual_amount_a,
+            amount_b_deployed: params.actual_amount_b,
             timestamp: clock.unix_timestamp,
         });
 
         Ok(())
     }
 
-    pub fn emergency_withdraw(ctx: Context<EmergencyWithdraw>) -> Result<()> {
-        let vault = &ctx.accounts.vault;
-        require!(
-            ctx.accounts.owner.key() == vault.owner,
-            KinesisError::Unauthorized
-        );
-
-        let vault_bump = vault.bump;
-        let vault_key = vault.key();
+    pub fn emergency_withdraw(
+        ctx: Context<EmergencyWithdraw>,
+        amount_a: u64,
+        amount_b: u64,
+    ) -> Result<()> {
+        let vault_state = &ctx.accounts.vault_state;
+        let auth_key = vault_state.authority;
         let seeds = &[
-            b"kinesis_vault",
-            vault.owner.as_ref(),
-            vault.token_a_mint.as_ref(),
-            vault.token_b_mint.as_ref(),
-            &[vault_bump],
+            b"kinetic_vault",
+            auth_key.as_ref(),
+            &[vault_state.bump],
         ];
         let signer = &[&seeds[..]];
 
-        let balance_a = ctx.accounts.vault_token_a.amount;
-        if balance_a > 0 {
-            let cpi_accounts = Transfer {
-                from: ctx.accounts.vault_token_a.to_account_info(),
-                to: ctx.accounts.owner_token_a.to_account_info(),
-                authority: ctx.accounts.vault.to_account_info(),
-            };
+        if amount_a > 0 {
             token::transfer(
                 CpiContext::new_with_signer(
                     ctx.accounts.token_program.to_account_info(),
-                    cpi_accounts,
+                    Transfer {
+                        from: ctx.accounts.token_a_vault.to_account_info(),
+                        to: ctx.accounts.recipient_token_a.to_account_info(),
+                        authority: ctx.accounts.vault_state.to_account_info(),
+                    },
                     signer,
                 ),
-                balance_a,
+                amount_a,
             )?;
         }
 
-        let balance_b = ctx.accounts.vault_token_b.amount;
-        if balance_b > 0 {
-            let cpi_accounts = Transfer {
-                from: ctx.accounts.vault_token_b.to_account_info(),
-                to: ctx.accounts.owner_token_b.to_account_info(),
-                authority: ctx.accounts.vault.to_account_info(),
-            };
+        if amount_b > 0 {
             token::transfer(
                 CpiContext::new_with_signer(
                     ctx.accounts.token_program.to_account_info(),
-                    cpi_accounts,
+                    Transfer {
+                        from: ctx.accounts.token_b_vault.to_account_info(),
+                        to: ctx.accounts.recipient_token_b.to_account_info(),
+                        authority: ctx.accounts.vault_state.to_account_info(),
+                    },
                     signer,
                 ),
-                balance_b,
+                amount_b,
             )?;
         }
 
-        emit!(EmergencyWithdrawEvent {
-            vault: vault_key,
-            amount_a_returned: balance_a,
-            amount_b_returned: balance_b,
+        emit!(EmergencyWithdrawalEvent {
+            authority: ctx.accounts.authority.key(),
+            amount_a,
+            amount_b,
+            timestamp: Clock::get()?.unix_timestamp,
         });
 
         Ok(())
     }
-
-    pub fn toggle_pause(ctx: Context<OwnerAction>, paused: bool) -> Result<()> {
-        let vault = &mut ctx.accounts.vault;
-        vault.is_paused = paused;
-        emit!(VaultPauseToggledEvent { vault: vault.key(), paused });
-        Ok(())
-    }
 }
+
+// -----------------------------------------------------------------------------
+// ACCOUNT VALIDATION STRUCTS
+// -----------------------------------------------------------------------------
 
 #[derive(Accounts)]
 pub struct InitializeVault<'info> {
-    #[account(
-        init,
-        payer = owner,
-        space = 8 + RebalanceVault::INIT_SPACE,
-        seeds = [b"kinesis_vault", owner.key().as_ref(), token_a_mint.key().as_ref(), token_b_mint.key().as_ref()],
-        bump
-    )]
-    pub vault: Account<'info, RebalanceVault>,
     #[account(mut)]
-    pub owner: Signer<'info>,
-    /// CHECK: The off-chain automated executor address
-    pub agent: AccountInfo<'info>,
+    pub authority: Signer<'info>,
+
+    /// CHECK: Agent authority dedicated to algorithmic calls
+    pub agent_executor: AccountInfo<'info>,
+
     pub token_a_mint: Account<'info, Mint>,
     pub token_b_mint: Account<'info, Mint>,
+
     #[account(
         init,
-        payer = owner,
+        payer = authority,
+        space = 8 + VaultState::INIT_SPACE,
+        seeds = [b"kinetic_vault", authority.key().as_ref()],
+        bump
+    )]
+    pub vault_state: Account<'info, VaultState>,
+
+    #[account(
+        init,
+        payer = authority,
+        seeds = [b"token_a_vault", vault_state.key().as_ref()],
+        bump,
         token::mint = token_a_mint,
-        token::authority = vault,
+        token::authority = vault_state,
     )]
     pub token_a_vault: Account<'info, TokenAccount>,
+
     #[account(
         init,
-        payer = owner,
+        payer = authority,
+        seeds = [b"token_b_vault", vault_state.key().as_ref()],
+        bump,
         token::mint = token_b_mint,
-        token::authority = vault,
+        token::authority = vault_state,
     )]
     pub token_b_vault: Account<'info, TokenAccount>,
+
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub rent: Sysvar<'info, Rent>,
 }
 
 #[derive(Accounts)]
-pub struct DepositTokens<'info> {
+pub struct UpdateVaultSettings<'info> {
+    pub authority: Signer<'info>,
     #[account(
         mut,
-        has_one = owner,
-        has_one = token_a_vault,
-        has_one = token_b_vault,
+        has_one = authority @ VaultError::UnauthorizedAdmin
     )]
-    pub vault: Account<'info, RebalanceVault>,
+    pub vault_state: Account<'info, VaultState>,
+}
+
+#[derive(Accounts)]
+pub struct DepositLiquidity<'info> {
     #[account(mut)]
-    pub owner: Signer<'info>,
-    #[account(mut)]
-    pub owner_token_a: Account<'info, TokenAccount>,
-    #[account(mut)]
-    pub owner_token_b: Account<'info, TokenAccount>,
-    #[account(mut)]
-    pub vault_token_a: Account<'info, TokenAccount>,
-    #[account(mut)]
-    pub vault_token_b: Account<'info, TokenAccount>,
+    pub depositor: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"kinetic_vault", vault_state.authority.as_ref()],
+        bump = vault_state.bump
+    )]
+    pub vault_state: Account<'info, VaultState>,
+
+    #[account(
+        mut,
+        seeds = [b"token_a_vault", vault_state.key().as_ref()],
+        bump = vault_state.vault_a_bump
+    )]
+    pub token_a_vault: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        seeds = [b"token_b_vault", vault_state.key().as_ref()],
+        bump = vault_state.vault_b_bump
+    )]
+    pub token_b_vault: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        constraint = user_token_a.mint == vault_state.token_a_mint @ VaultError::InvalidMint
+    )]
+    pub user_token_a: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        constraint = user_token_b.mint == vault_state.token_b_mint @ VaultError::InvalidMint
+    )]
+    pub user_token_b: Account<'info, TokenAccount>,
+
+    #[account(
+        init_if_needed,
+        payer = depositor,
+        space = 8 + UserBalance::INIT_SPACE,
+        seeds = [b"user_balance", vault_state.key().as_ref(), depositor.key().as_ref()],
+        bump
+    )]
+    pub user_balance: Account<'info, UserBalance>,
+
+    pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
 }
 
 #[derive(Accounts)]
-pub struct ExecuteRebalance<'info> {
+pub struct RebalancePosition<'info> {
+    pub agent_executor: Signer<'info>,
+
     #[account(
         mut,
-        has_one = agent,
-        has_one = token_a_vault,
-        has_one = token_b_vault,
+        seeds = [b"kinetic_vault", vault_state.authority.as_ref()],
+        bump = vault_state.bump
     )]
-    pub vault: Account<'info, RebalanceVault>,
-    pub agent: Signer<'info>,
-    #[account(mut)]
-    pub vault_token_a: Account<'info, TokenAccount>,
-    #[account(mut)]
-    pub vault_token_b: Account<'info, TokenAccount>,
+    pub vault_state: Account<'info, VaultState>,
+
+    #[account(
+        mut,
+        seeds = [b"token_a_vault", vault_state.key().as_ref()],
+        bump = vault_state.vault_a_bump
+    )]
+    pub token_a_vault: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        seeds = [b"token_b_vault", vault_state.key().as_ref()],
+        bump = vault_state.vault_b_bump
+    )]
+    pub token_b_vault: Account<'info, TokenAccount>,
+
     pub token_program: Program<'info, Token>,
 }
 
 #[derive(Accounts)]
 pub struct EmergencyWithdraw<'info> {
+    pub authority: Signer<'info>,
+
     #[account(
         mut,
-        has_one = owner,
-        has_one = token_a_vault,
-        has_one = token_b_vault,
+        has_one = authority @ VaultError::UnauthorizedAdmin,
+        seeds = [b"kinetic_vault", authority.key().as_ref()],
+        bump = vault_state.bump
     )]
-    pub vault: Account<'info, RebalanceVault>,
+    pub vault_state: Account<'info, VaultState>,
+
+    #[account(
+        mut,
+        seeds = [b"token_a_vault", vault_state.key().as_ref()],
+        bump = vault_state.vault_a_bump
+    )]
+    pub token_a_vault: Account<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        seeds = [b"token_b_vault", vault_state.key().as_ref()],
+        bump = vault_state.vault_b_bump
+    )]
+    pub token_b_vault: Account<'info, TokenAccount>,
+
     #[account(mut)]
-    pub owner: Signer<'info>,
+    pub recipient_token_a: Account<'info, TokenAccount>,
     #[account(mut)]
-    pub owner_token_a: Account<'info, TokenAccount>,
-    #[account(mut)]
-    pub owner_token_b: Account<'info, TokenAccount>,
-    #[account(mut)]
-    pub vault_token_a: Account<'info, TokenAccount>,
-    #[account(mut)]
-    pub vault_token_b: Account<'info, TokenAccount>,
+    pub recipient_token_b: Account<'info, TokenAccount>,
+
     pub token_program: Program<'info, Token>,
 }
 
-#[derive(Accounts)]
-pub struct OwnerAction<'info> {
-    #[account(mut, has_one = owner)]
-    pub vault: Account<'info, RebalanceVault>,
-    pub owner: Signer<'info>,
+// -----------------------------------------------------------------------------
+// STRUCTS & STATES
+// -----------------------------------------------------------------------------
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Debug)]
+pub struct RebalanceParams {
+    pub tick_lower: i32,
+    pub tick_upper: i32,
+    pub kinetic_energy_score: u64,
+    pub expected_amount_a: u64,
+    pub expected_amount_b: u64,
+    pub actual_amount_a: u64,
+    pub actual_amount_b: u64,
 }
 
 #[account]
 #[derive(InitSpace)]
-pub struct RebalanceVault {
-    pub owner: Pubkey,
-    pub agent: Pubkey,
+pub struct VaultState {
+    pub authority: Pubkey,
+    pub agent_executor: Pubkey,
     pub token_a_mint: Pubkey,
     pub token_b_mint: Pubkey,
     pub token_a_vault: Pubkey,
     pub token_b_vault: Pubkey,
-    pub max_tick_deviation: i32,
-    pub cooldown_period: i64,
     pub last_rebalance_ts: i64,
+    pub cooldown_seconds: i64,
+    pub active_tick_lower: i32,
+    pub active_tick_upper: i32,
+    pub rebalance_count: u64,
     pub max_slippage_bps: u16,
     pub bump: u8,
-    pub is_paused: bool,
+    pub vault_a_bump: u8,
+    pub vault_b_bump: u8,
 }
+
+#[account]
+#[derive(InitSpace)]
+pub struct UserBalance {
+    pub owner: Pubkey,
+    pub vault: Pubkey,
+    pub deposited_a: u64,
+    pub deposited_b: u64,
+}
+
+// -----------------------------------------------------------------------------
+// EVENTS
+// -----------------------------------------------------------------------------
 
 #[event]
 pub struct VaultInitializedEvent {
-    pub owner: Pubkey,
-    pub agent: Pubkey,
+    pub authority: Pubkey,
+    pub agent_executor: Pubkey,
+    pub token_a_mint: Pubkey,
+    pub token_b_mint: Pubkey,
     pub max_slippage_bps: u16,
-}
-
-#[event]
-pub struct LiquidityDepositedEvent {
-    pub vault: Pubkey,
-    pub amount_a: u64,
-    pub amount_b: u64,
-}
-
-#[event]
-pub struct RebalanceExecutedEvent {
-    pub vault: Pubkey,
-    pub executor: Pubkey,
-    pub new_lower_tick: i32,
-    pub new_upper_tick: i32,
-    pub oracle_twap_tick: i32,
     pub timestamp: i64,
 }
 
 #[event]
-pub struct EmergencyWithdrawEvent {
-    pub vault: Pubkey,
-    pub amount_a_returned: u64,
-    pub amount_b_returned: u64,
+pub struct LiquidityDepositedEvent {
+    pub depositor: Pubkey,
+    pub amount_a: u64,
+    pub amount_b: u64,
+    pub timestamp: i64,
 }
 
 #[event]
-pub struct VaultPauseToggledEvent {
-    pub vault: Pubkey,
-    pub paused: bool,
+pub struct RebalanceExecutedEvent {
+    pub executor: Pubkey,
+    pub old_tick_lower: i32,
+    pub old_tick_upper: i32,
+    pub new_tick_lower: i32,
+    pub new_tick_upper: i32,
+    pub kinetic_energy_score: u64,
+    pub amount_a_deployed: u64,
+    pub amount_b_deployed: u64,
+    pub timestamp: i64,
 }
 
+#[event]
+pub struct AgentUpdatedEvent {
+    pub new_executor: Pubkey,
+    pub timestamp: i64,
+}
+
+#[event]
+pub struct EmergencyWithdrawalEvent {
+    pub authority: Pubkey,
+    pub amount_a: u64,
+    pub amount_b: u64,
+    pub timestamp: i64,
+}
+
+// -----------------------------------------------------------------------------
+// ERROR CODES
+// -----------------------------------------------------------------------------
+
 #[error_code]
-pub enum KinesisError {
-    #[msg("Vault is currently paused by owner")]
-    VaultPaused,
-    #[msg("Slippage setting exceeds protocol maximum")]
-    ExcessiveSlippageSetting,
-    #[msg("Cooldown period below minimum threshold")]
-    CooldownTooShort,
-    #[msg("Cooldown period active. Rebalancing too frequently")]
+pub enum VaultError {
+    #[msg("Admin authorization failed")]
+    UnauthorizedAdmin,
+    #[msg("Agent signer does not match vault executor")]
+    UnauthorizedAgent,
+    #[msg("Rebalance requested before cooldown expiry")]
     CooldownActive,
-    #[msg("Invalid tick bounds: lower tick must be strictly less than upper tick")]
-    InvalidTicks,
-    #[msg("Target tick bounds deviate excessively from Oracle TWAP")]
-    OracleDeviationBreached,
-    #[msg("Caller is unauthorized to perform this operation")]
-    Unauthorized,
+    #[msg("Tick bounds invalid: tick_lower must be strictly less than tick_upper")]
+    InvalidTickBounds,
+    #[msg("Kinetic energy score must be non-zero")]
+    InvalidKineticMetric,
+    #[msg("Slippage limit exceeded on Token A")]
+    SlippageExceededTokenA,
+    #[msg("Slippage limit exceeded on Token B")]
+    SlippageExceededTokenB,
+    #[msg("Calculated integer math overflow")]
+    MathOverflow,
+    #[msg("Token mint provided does not match configured vault token mint")]
+    InvalidMint,
+    #[msg("Deposit amount must be strictly positive for at least one token")]
+    ZeroDepositAmount,
+    #[msg("Max slippage basis points must be <= 1000 (10%)")]
+    ExcessiveSlippageSetting,
+    #[msg("Cooldown must be at least 10 seconds")]
+    CooldownTooShort,
 }

@@ -1,8 +1,5 @@
-SOLANA_RPC_URL=https://mainnet.helius-rpc.com/?api-key=YOUR_API_KEY
-SOLANA_WS_URL=wss://mainnet.helius-rpc.com/?api-key=YOUR_API_KEY
-AGENT_PRIVATE_KEY=5K...YOUR_BASE58_ENCODED_PRIVATE_KEY
-POOL_ADDRESS=HJPjoWUrhoZzkNfRpHuieeFh9WcDNwpWB9GQB1MmCxwd # SOL/USDC Whirlpool
-ACTIVE_POSITION_ADDRESS=
-JITO_BLOCK_ENGINE_URL=https://mainnet.block-engine.jito.wtf/api/v1/bundles
-JITO_TIP_LAMPORTS=100000
-MIN_REBALANCE_PROFIT_USD=2.50
+SOLANA_RPC_URL=https://api.devnet.solana.com
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/123456789/token
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/T00/B00/XXXXX
+RESEND_API_KEY=re_test_000000000000000000000000
+REPORTING_EMAIL=liquidity-ops@protocol.fi

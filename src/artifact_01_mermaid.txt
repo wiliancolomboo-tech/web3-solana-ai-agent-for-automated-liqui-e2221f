@@ -1,40 +1,41 @@
 flowchart TD
-    subgraph OffChainEngine ["Off-Chain Kinetic Agent & Keeper Subsystem"]
-        WS["Solana Geyser / RPC WebSocket (Micro-Swaps & Ticks)"] -->|"Stream Tick Data"| Engine["Kinetic Volatility Engine (Python/NumPy)"]
-        Engine -->|"Compute v, a, GKYZ"| VCheck{"Vk > Adaptive Threshold?"}
-        VCheck -- "No" --> WS
-        VCheck -- "Yes" --> CalcRange["Derive Optimal [t_lower, t_upper] & Swap Route"]
-        CalcRange --> GenTx["Serialize & Sign Rebalance IX via Keeper Keypair"]
+    subgraph Solana Runtime Layer
+        DEX[Raydium / Orca CLMM Pool]
+        VAULT[Kinetic Vault Anchor Program]
+        ORACLE[Pyth / Switchboard Price Feed]
+        PDA_POS[(Agent Vault Position PDA)]
     end
 
-    subgraph SolanaCluster ["Solana Runtime (On-Chain)"]
-        GenTx -->|"Atomic Instruction Bundle"| Prog["Kinetic Rebalancer Program (Anchor)"]
-
-        subgraph SecurityGuards ["Deterministic On-Chain Security Guards"]
-            Prog --> G1{"Authority / Keeper Signer?"}
-            G1 -- "Fail" --> E1["Err: UnauthorizedKeeper"]
-            G1 -- "Pass" --> G2{"Clock / Epoch Cooldown?"}
-            G2 -- "Fail" --> E2["Err: CooldownActive"]
-            G2 -- "Pass" --> G3{"Slippage <= Max Allowed BPS?"}
-            G3 -- "Fail" --> E3["Err: ExcessiveSlippage"]
-            G3 -- "Pass" --> G4{"Oracle Price Drift Tolerance?"}
-            G4 -- "Fail" --> E4["Err: PriceBandExceeded"]
-        end
-
-        subgraph VaultState ["Program Derived Addresses (PDAs)"]
-            VAccount[("Vault State PDA [b'vault', pool_id]")]
-            PosPDA[("Position Custody PDA [b'position', vault_id]")]
-        end
-
-        G4 -- "Pass Execution" --> CPI_Orchestrator["CPI Orchestrator (Anchor Dynamic CPI)"]
-
-        subgraph DEX_CLMM ["Orca Whirlpool / Raydium CLMM"]
-            CPI_Orchestrator -->|"1. Decrease Liquidity"| W1["Burn Position Liquidity & Collect Tokens"]
-            W1 -->|"2. Optimal Rebalance Swap"| W2["Swap Imbalance Residuals (Token A <-> B)"]
-            W2 -->|"3. Open Position & Mint"| W3["Open Range [t_lower, t_upper] & Add Liquidity"]
-        end
-
-        W3 --> UpdateState["Update Vault State (Ticks, Liquidity, LastRebalanceTs)"]
-        UpdateState --> PosPDA
-        UpdateState --> VAccount
+    subgraph Off-Chain Autonomous Agent
+        WS[Geyser / WebSocket RPC Listener]
+        KINETIC[Kinetic Volatility Engine]
+        OPT[Tick Width & Sizing Optimizer]
+        BUILDER[Atomic Tx & Jito Bundle Builder]
+        METRICS[Prometheus & Health Exporter]
     end
+
+    subgraph Enterprise Integration Layer
+        JITO[Jito Block Engine MEV-Protected]
+        DISCORD[Discord Ops Webhook Alerting]
+        RESEND[Resend Enterprise Email Service]
+        GRAFANA[Enterprise Telemetry Dashboard]
+    end
+
+    DEX -->|Account State Updates| WS
+    ORACLE -->|High-Frequency Price Feeds| WS
+    WS -->|OHLCV & Tick Traversal Stream| KINETIC
+    
+    KINETIC -->|Kinetic Volatility & Momentum| OPT
+    OPT -->|Optimal Bounds Exceeds Delta| BUILDER
+
+    BUILDER -->|Simulate & Validate Slippage| VAULT
+    BUILDER -->|Submit MEV-Protected Bundle| JITO
+    JITO -->|Atomic Inclusion in Block N| VAULT
+
+    VAULT -->|Execute Atomic Rebalance| DEX
+    VAULT -->|Verify Slippage & Update Bounds| PDA_POS
+    VAULT -->|Emit RebalanceEvent| WS
+
+    BUILDER -->|Rebalance Telemetry| DISCORD
+    BUILDER -->|Critical Risk Alerts| RESEND
+    METRICS -->|Prometheus Metrics :9090| GRAFANA

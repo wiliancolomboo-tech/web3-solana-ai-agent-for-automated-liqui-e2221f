@@ -1,6 +1,8 @@
-SOLANA_RPC_URL="https://mainnet.helius-rpc.com/?api-key=YOUR_KEY"
-SOLANA_WSS_URL="wss://mainnet.helius-rpc.com/?api-key=YOUR_KEY"
-GEYSER_ENDPOINT="http://127.0.0.1:10000"
-JITO_BLOCK_ENGINE_URL="https://mainnet.block-engine.jito.wtf"
-AGENT_PRIVATE_KEY="[YOUR_BS58_PRIVATE_KEY]"
-TARGET_WHIRLPOOL="HJPjoWUrhoZzkNfRpHuieeFk9WcUpjwzpnjS2hMQQuEQ"
+SOLANA_RPC_URL=https://api.devnet.solana.com
+PROGRAM_ID=Kinet1cReba1ance11111111111111111111111111111
+VAULT_PDA=H7wQJq9JzB2c8uVz3V9j5vP5eT2uN4j2m8bK1wP4a2yZ
+PYTH_FEED_SOL_USD=J83w4HKfqxwcq3BEMMkPFSQdUCviiZLTbx2jE413DG9
+KEEPER_PRIVATE_KEY=[12,43,154,...]
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/your-channel-id/token
+RESEND_API_KEY=re_123456789abcdef
+ALERT_EMAIL=security@enterprise-fund.com

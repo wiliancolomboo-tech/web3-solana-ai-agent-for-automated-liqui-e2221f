@@ -1,34 +1,43 @@
 flowchart TD
-    subgraph MarketData [Data Ingestion & Microstructure Engine]
-        A1[Solana RPC / Geyser WebSocket] -->|Tick Arrays & Trades| B1[Ingestion Pipeline]
-        A2[Pyth Network TWAP Oracle] -->|Independent Price Feed| B1
-        B1 --> C1[Kinetic Volatility Engine]
-        C1 -->|Compute Velocity & Volume Weight| D1{Regime Decision Engine}
+    subgraph Solana Mainnet Cluster ["Solana Cluster (On-Chain)"]
+        Whirlpool["Orca / Raydium CLMM Pool\n(Target Pool: SOL/USDC)"]
+        PythOracle["Pyth Price Feeds\n(Real-Time Oracle Benchmark)"]
+        VaultProgram["Kinetic Rebalancer Program\n(Anchor Vault PDA)"]
+        VaultAccounts["Vault Token Accounts\n(Non-Custodial Escrow A & B)"]
     end
 
-    subgraph DecisionMatrix [Agent Strategy Engine]
-        D1 -->|Threshold Met: Delta > Band Margin| E1[Tick Boundary Optimizer]
-        D1 -->|Kinetic Shock Detected| E2[Emergency Asymmetric Defense]
-        D1 -->|In Equilibrium| E3[Hold & Compound Fees]
-        E1 --> F1[Payload Synthesizer]
-        E2 --> F1
+    subgraph Autonomous Agent ["Autonomous AI Agent Runtime (Off-Chain Engine)"]
+        RPC_Ingest["Geyser / Yellowstone gRPC\n+ RPC Multiplexer"]
+        KineticEngine["Kinetic Volatility Engine\n- Garman-Klass Volatility\n- Price Velocity & Acceleration\n- Dynamic Tick Sizing"]
+        DecisionMatrix{"Rebalance\nCondition Met?"}
+        TxBuilder["Solana Transaction Builder\n- Compute Budget Optimizer\n- Priority Fee Engine"]
+        KeyManager["Encrypted Keyring / KMS\n(Restricted Keeper Identity)"]
     end
 
-    subgraph SolanaExecution [On-Chain Kinesis Program]
-        F1 --> G1[Jito-Solana MEV Bundle Engine]
-        G1 -->|Direct Validator Route| H1[Kinesis Anchor Vault]
-        H1 -->|Verify Oracle Price Deviation| I1{Safety Constraints Passed?}
-        I1 -->|No: Slippage/Cooldown Breach| J1[Revert & Emit Alert]
-        I1 -->|Yes: Valid Parameters| K1[Withdraw Liquidity from Orca/Raydium]
-        K1 --> L1[Execute Rebalancing Swap if needed]
-        L1 --> M1[Mint New Concentrated Liquidity Position]
+    subgraph Enterprise Infrastructure ["Enterprise Observability & Ops"]
+        Prometheus["Prometheus / Grafana\nMetrics Exporter"]
+        AlertRouter["Enterprise Alert Service\n(Resend API / Discord Webhook)"]
+        SecOps["Security Operations\n(Circuit Breaker Trigger)"]
     end
 
-    subgraph EnterpriseOps [Enterprise Notification & Telemetry]
-        K1 --> N1[Agent Event Collector]
-        M1 --> N1
-        J1 --> N1
-        N1 --> O1[Resend Audit Email Service]
-        N1 --> O2[Slack/Discord Security Webhook]
-        N1 --> O3[Prometheus & Grafana Exporter]
-    end
+    %% Data Ingestion
+    Whirlpool -->|Price & Liquidity Updates| RPC_Ingest
+    PythOracle -->|Confidence & TWAP| RPC_Ingest
+    RPC_Ingest --> KineticEngine
+
+    %% Decision & Transaction Pipeline
+    KineticEngine --> DecisionMatrix
+    DecisionMatrix -- "No (Hold State)" --> RPC_Ingest
+    DecisionMatrix -- "Yes (Rebalance Required)" --> TxBuilder
+    KeyManager -->|Sign Rebalance IX| TxBuilder
+    TxBuilder -->|Execute rebalance() Instruction| VaultProgram
+
+    %% On-Chain Execution
+    VaultProgram -->|Cross-Verify Price| PythOracle
+    VaultProgram -->|Close & Reposition Liquidity| Whirlpool
+    VaultProgram -->|Deposit / Mint Position| VaultAccounts
+
+    %% Observability Loop
+    TxBuilder -->|Tx Confirmation / Telemetry| Prometheus
+    TxBuilder -->|Rebalance Events & Slippage Alerts| AlertRouter
+    SecOps -.->|Admin Emergency Pause| VaultProgram

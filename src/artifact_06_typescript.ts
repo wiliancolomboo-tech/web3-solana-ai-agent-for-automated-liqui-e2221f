@@ -1,184 +1,139 @@
-import * as anchor from "@coral-xyz/anchor";
-import { Program } from "@coral-xyz/anchor";
-import { KineticRebalancer } from "../target/types/kinetic_rebalancer";
-import { Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
-import { TOKEN_PROGRAM_ID, createMint, createAccount, mintTo } from "@solana/spl-token";
-import { expect } from "chai";
+export interface PriceSample {
+  timestamp: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
 
-describe("kinetic-rebalancer test suite", () => {
-  const provider = anchor.AnchorProvider.env();
-  anchor.setProvider(provider);
+export interface KineticMetrics {
+  velocity: number;            // First derivative of price dp/dt
+  acceleration: number;        // Second derivative of price d^2p/dt^2
+  garmanKlassVol: number;      // High/Low variance estimator
+  kineticEnergy: number;       // 1/2 * mass * velocity^2
+  recommendedTickLower: i32;
+  recommendedTickUpper: i32;
+  shouldRebalance: boolean;
+}
 
-  const program = anchor.workspace.KineticRebalancer as Program<KineticRebalancer>;
+export type i32 = number;
 
-  let owner: Keypair;
-  let operator: Keypair;
-  let maliciousUser: Keypair;
-  let tokenAMint: PublicKey;
-  let tokenBMint: PublicKey;
-  let vaultStatePda: PublicKey;
-  let vaultAuthPda: PublicKey;
-  let tokenAVault: Keypair;
-  let tokenBVault: Keypair;
+export class KineticEngine {
+  private history: PriceSample[] = [];
+  private readonly maxSamples: number;
+  private readonly tickSpacing: number;
 
-  before(async () => {
-    owner = Keypair.generate();
-    operator = Keypair.generate();
-    maliciousUser = Keypair.generate();
-    tokenAVault = Keypair.generate();
-    tokenBVault = Keypair.generate();
+  constructor(maxSamples: number = 60, tickSpacing: number = 64) {
+    this.maxSamples = maxSamples;
+    this.tickSpacing = tickSpacing;
+  }
 
-    // Fund test wallets
-    for (const kp of [owner, operator, maliciousUser]) {
-      const sig = await provider.connection.requestAirdrop(kp.publicKey, 10 * anchor.web3.LAMPORTS_PER_SOL);
-      await provider.connection.confirmTransaction(sig);
+  public ingestPrice(sample: PriceSample): void {
+    this.history.push(sample);
+    if (this.history.length > this.maxSamples) {
+      this.history.shift();
+    }
+  }
+
+  /**
+   * Calculates Garman-Klass Volatility:
+   * σ_GK = sqrt( (1 / 2N) * Σ (ln(H/L))^2 - (2ln2 - 1) * Σ (ln(C/O))^2 )
+   */
+  public computeGarmanKlass(): number {
+    const n = this.history.length;
+    if (n < 5) return 0.0;
+
+    let hlSum = 0;
+    let coSum = 0;
+
+    for (const s of this.history) {
+      const hl = Math.log(s.high / Math.max(s.low, 1e-8));
+      const co = Math.log(s.close / Math.max(s.open, 1e-8));
+      hlSum += 0.5 * Math.pow(hl, 2);
+      coSum += (2 * Math.LN2 - 1) * Math.pow(co, 2);
     }
 
-    // Create Mints
-    tokenAMint = await createMint(provider.connection, owner, owner.publicKey, null, 6);
-    tokenBMint = await createMint(provider.connection, owner, owner.publicKey, null, 6);
+    const variance = (hlSum - coSum) / n;
+    return Math.sqrt(Math.max(variance, 0.0));
+  }
 
-    [vaultStatePda] = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("kinetic_vault"),
-        owner.publicKey.toBuffer(),
-        tokenAMint.toBuffer(),
-        tokenBMint.toBuffer(),
-      ],
-      program.programId
+  /**
+   * Evaluates Kinetic Momentum (Velocity & Acceleration)
+   */
+  public evaluate(currentTickLower: number, currentTickUpper: number): KineticMetrics {
+    const n = this.history.length;
+    if (n < 5) {
+      return {
+        velocity: 0,
+        acceleration: 0,
+        garmanKlassVol: 0,
+        kineticEnergy: 0,
+        recommendedTickLower: currentTickLower,
+        recommendedTickUpper: currentTickUpper,
+        shouldRebalance: false,
+      };
+    }
+
+    const latest = this.history[n - 1];
+    const prev = this.history[n - 2];
+    const prev2 = this.history[n - 3];
+
+    const dt1 = Math.max((latest.timestamp - prev.timestamp) / 1000, 1);
+    const dt2 = Math.max((prev.timestamp - prev2.timestamp) / 1000, 1);
+
+    const v1 = (latest.close - prev.close) / dt1;
+    const v0 = (prev.close - prev2.close) / dt2;
+    const acceleration = (v1 - v0) / dt1;
+    const velocity = v1;
+
+    // Mass normalized by recent trade volume
+    const mass = Math.log(Math.max(latest.volume, 1.0));
+    const kineticEnergy = 0.5 * mass * Math.pow(velocity, 2);
+    const gkVol = this.computeGarmanKlass();
+
+    // Map spot price to tick
+    const currentTick = this.priceToTick(latest.close);
+
+    // Compute dynamic width based on GK-volatility and Kinetic Energy dampener
+    const baseSpanTicks = Math.max(
+      Math.floor((gkVol * 10000) / this.tickSpacing) * this.tickSpacing,
+      this.tickSpacing * 10
     );
 
-    [vaultAuthPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("kinetic_authority")],
-      program.programId
-    );
-  });
+    // Asymmetric skew: if positive velocity, skew range forward
+    const skewOffsetTicks = Math.floor((velocity / (latest.close * 0.001)) * this.tickSpacing);
 
-  it("1. Successfully initializes a non-custodial kinetic vault", async () => {
-    const maxSlippageBps = 100; // 1%
-    const cooldownSeconds = new anchor.BN(10);
+    let rawLower = currentTick - baseSpanTicks + skewOffsetTicks;
+    let rawUpper = currentTick + baseSpanTicks + skewOffsetTicks;
 
-    await program.methods
-      .initializeVault(maxSlippageBps, cooldownSeconds)
-      .accounts({
-        owner: owner.publicKey,
-        operator: operator.publicKey,
-        tokenAMint: tokenAMint,
-        tokenBMint: tokenBMint,
-        vaultState: vaultStatePda,
-        vaultAuthority: vaultAuthPda,
-        tokenAVault: tokenAVault.publicKey,
-        tokenBVault: tokenBVault.publicKey,
-        systemProgram: SystemProgram.programId,
-        tokenProgram: TOKEN_PROGRAM_ID,
-        rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-      })
-      .signers([owner, tokenAVault, tokenBVault])
-      .rpc();
+    // Snap to tick spacing
+    const snappedLower = Math.floor(rawLower / this.tickSpacing) * this.tickSpacing;
+    const snappedUpper = Math.ceil(rawUpper / this.tickSpacing) * this.tickSpacing;
 
-    const vaultAccount = await program.account.vaultState.fetch(vaultStatePda);
-    expect(vaultAccount.owner.toBase58()).to.equal(owner.publicKey.toBase58());
-    expect(vaultAccount.operator.toBase58()).to.equal(operator.publicKey.toBase58());
-    expect(vaultAccount.maxSlippageBps).to.equal(100);
-    expect(vaultAccount.totalRebalanceCount.toNumber()).to.equal(0);
-  });
+    // Rebalance trigger: spot price breached 85% of existing bounds
+    const span = currentTickUpper - currentTickLower;
+    const buffer = span * 0.15;
+    const isOutofBounds =
+      currentTick <= currentTickLower + buffer || currentTick >= currentTickUpper - buffer;
 
-  it("2. Rejects initialization with excessive slippage (>5%)", async () => {
-    const invalidSlippage = 600; // 6%
-    const tempOwner = Keypair.generate();
-    const sig = await provider.connection.requestAirdrop(tempOwner.publicKey, 2 * anchor.web3.LAMPORTS_PER_SOL);
-    await provider.connection.confirmTransaction(sig);
+    // Dampener check: do NOT rebalance if kinetic energy is bursting (flash crash),
+    // wait for shockwave dissipation unless hard boundary breached
+    const isShockwave = kineticEnergy > 500 && Math.abs(acceleration) > 2.0;
+    const shouldRebalance = isOutofBounds && !isShockwave;
 
-    const [tempVaultPda] = PublicKey.findProgramAddressSync(
-      [Buffer.from("kinetic_vault"), tempOwner.publicKey.toBuffer(), tokenAMint.toBuffer(), tokenBMint.toBuffer()],
-      program.programId
-    );
+    return {
+      velocity,
+      acceleration,
+      garmanKlassVol: gkVol,
+      kineticEnergy,
+      recommendedTickLower: snappedLower,
+      recommendedTickUpper: snappedUpper,
+      shouldRebalance,
+    };
+  }
 
-    try {
-      await program.methods
-        .initializeVault(invalidSlippage, new anchor.BN(10))
-        .accounts({
-          owner: tempOwner.publicKey,
-          operator: operator.publicKey,
-          tokenAMint: tokenAMint,
-          tokenBMint: tokenBMint,
-          vaultState: tempVaultPda,
-          vaultAuthority: vaultAuthPda,
-          tokenAVault: Keypair.generate().publicKey,
-          tokenBVault: Keypair.generate().publicKey,
-          systemProgram: SystemProgram.programId,
-          tokenProgram: TOKEN_PROGRAM_ID,
-          rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-        })
-        .signers([tempOwner])
-        .rpc();
-      expect.fail("Should have failed with ExcessiveSlippageSetting");
-    } catch (err: any) {
-      expect(err.error.errorCode.code).to.equal("ExcessiveSlippageSetting");
-    }
-  });
-
-  it("3. Executes valid kinetic rebalance by authorized operator", async () => {
-    const targetLowerTick = -1200;
-    const targetUpperTick = 1200;
-    const minTokenA = new anchor.BN(0);
-    const minTokenB = new anchor.BN(0);
-
-    const tx = await program.methods
-      .executeRebalance(targetLowerTick, targetUpperTick, minTokenA, minTokenB)
-      .accounts({
-        operator: operator.publicKey,
-        vaultState: vaultStatePda,
-        vaultAuthority: vaultAuthPda,
-        tokenAVault: tokenAVault.publicKey,
-        tokenBVault: tokenBVault.publicKey,
-        tokenProgram: TOKEN_PROGRAM_ID,
-      })
-      .signers([operator])
-      .rpc();
-
-    expect(tx).to.be.a("string");
-    const vaultAccount = await program.account.vaultState.fetch(vaultStatePda);
-    expect(vaultAccount.totalRebalanceCount.toNumber()).to.equal(1);
-  });
-
-  it("4. Rejects rebalance attempts within the cooldown window", async () => {
-    try {
-      await program.methods
-        .executeRebalance(-1000, 1000, new anchor.BN(0), new anchor.BN(0))
-        .accounts({
-          operator: operator.publicKey,
-          vaultState: vaultStatePda,
-          vaultAuthority: vaultAuthPda,
-          tokenAVault: tokenAVault.publicKey,
-          tokenBVault: tokenBVault.publicKey,
-          tokenProgram: TOKEN_PROGRAM_ID,
-        })
-        .signers([operator])
-        .rpc();
-      expect.fail("Should have failed due to active cooldown");
-    } catch (err: any) {
-      expect(err.error.errorCode.code).to.equal("CooldownActive");
-    }
-  });
-
-  it("5. Rejects unauthorized callers attempting to rebalance", async () => {
-    try {
-      await program.methods
-        .executeRebalance(-800, 800, new anchor.BN(0), new anchor.BN(0))
-        .accounts({
-          operator: maliciousUser.publicKey,
-          vaultState: vaultStatePda,
-          vaultAuthority: vaultAuthPda,
-          tokenAVault: tokenAVault.publicKey,
-          tokenBVault: tokenBVault.publicKey,
-          tokenProgram: TOKEN_PROGRAM_ID,
-        })
-        .signers([maliciousUser])
-        .rpc();
-      expect.fail("Should have thrown UnauthorizedOperator");
-    } catch (err: any) {
-      expect(err.error.errorCode.code).to.equal("UnauthorizedOperator");
-    }
-  });
-});
+  public priceToTick(price: number): number {
+    return Math.floor(Math.log(price) / Math.log(1.0001));
+  }
+}

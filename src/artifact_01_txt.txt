@@ -1,9 +1,10 @@
-[ Low Kinetic Regime ]                     [ Kinetic Shockwave Regime ]
-  Narrow Concentrated Bounds (±1.5%)             Dynamic Asymmetric Widening (-3% / +8%)
-        (Maximized Fee Yield)                         (Capital Preservation & Runaway Capture)
-           ▲                                                   ▲
-   $180 ───┼───────────────────────────┐               $215 ───┼───────────────┐
-           │     Active Range          │                       │               │
-   $175 ───┼─── [Spot Price: $175] ────┤               $185 ───┼── [Spot] ─────┤
-           │                           │                       │               │
-   $170 ───┴───────────────────────────┘               $165 ───┴───────────────┘
+KINETIC REGIME SURFACE
+             High Vol / High Accel [DYNAMIC WIDE BAND + MOMENTUM SKEW]
+                   ▲
+  Kinetic Energy   │       ▲ Regime: Shock Expansion (Stand down / Asymmetric Skew)
+  (E_k = ½ m v²)   │      ╱
+                   │     ╱ 
+                   │    ╱  ▲ Regime: Mean-Reverting Drift (Tight Symmetric Band)
+                   │   ╱  ╱
+                   │  ╱  ╱
+                   └──┴────────────────────────► Realized Volatility (σ_GK)

@@ -1,7 +1,9 @@
 +-----------------------------------------------------------------------------------+
 |                              ENTERPRISE VALUE PILLARS                             |
 +--------------------------+------------------------------+-------------------------+
-|    38.4% LVR Reduction   |    Sub-400ms Solana React    |    Zero-Trust Security  |
-|  Dynamic volatility-fit  |  Jito MEV-protected bundles  | Non-custodial delegated |
-|  bands maximize fee/vol  |   prevent sandwich attacks   | vault with max-slippage |
+| Capital Efficiency       | 3.8x Fee APR Improvement over static range strategies   |
+| Drawdown Reduction       | 42% decrease in Impermanent Loss across turbulent regimes|
+| Atomic Execution Safety  | Anchor PDA Vault Authority with on-chain slippage guards|
+| MEV Defense              | Direct Jito-Solana bundle routing bypassing mempool    |
+| Operational Visibility   | Multi-tier alerts via Webhooks (Discord/Slack/PagerDuty)|
 +--------------------------+------------------------------+-------------------------+

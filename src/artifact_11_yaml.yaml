@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  kinetic-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      - SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+      - PROGRAM_ID=K1nEticVaULT1111111111111111111111111111111
+      - VAULT_STATE_ADDRESS=F7m28yK7hQo2w6MsqL3xK8U3Qk4Rj2S6V3wP8v1m2X4Y
+      - AGENT_KEYPAIR_JSON=[1,2,3...255] # Secret Key Byte Array
+      - DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/YOUR_WEBHOOK
+      - RESEND_API_KEY=re_test_000000000000000000000000
+      - ALERT_EMAIL_RECIPIENT=ops@kineticvault.fi
+      - METRICS_PORT=9090
+    ports:
+      - "9090:9090"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    restart: always
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9091:9090"
